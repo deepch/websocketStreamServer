@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"logger"
 	"mediaTypes/flv"
+	"mediaTypes/mp4"
 	"streamer"
 	"sync"
 	"time"
@@ -141,6 +142,7 @@ func (this *websocketHandler) processWSMessage(data []byte) (err error) {
 			stConnect := &WsConnect{}
 			err = json.Unmarshal(data[2:], stConnect)
 			if err != nil {
+				logger.LOGE(err.Error())
 				return
 			}
 			return this.msg_connect(stConnect)
@@ -181,6 +183,7 @@ func (this *websocketHandler) processWSMessage(data []byte) (err error) {
 
 	default:
 		err = errors.New(fmt.Sprintf("msg type %d not supported", msgType))
+		logger.LOGW("invalid binary data")
 		return
 	}
 	return
@@ -232,6 +235,7 @@ func (this *websocketHandler) threadPlay() {
 	}()
 
 	this.sendStreamBegin()
+	fmp4Creater := &mp4.FMP4Creater{}
 	for this.isPlaying {
 		this.stPlay.mutexCache.Lock()
 		if this.stPlay.cache == nil || this.stPlay.cache.Len() == 0 {
@@ -243,6 +247,10 @@ func (this *websocketHandler) threadPlay() {
 		for v := this.stPlay.cache.Front(); v != nil; v = v.Next() {
 			//tag := v.Value.(*flv.FlvTag)
 			this.stPlay.cache.Remove(this.stPlay.cache.Front())
+			slice := fmp4Creater.AddFlvTag(v.Value.(*flv.FlvTag))
+			if slice != nil {
+				this.sendSlice(slice)
+			}
 		}
 		this.stPlay.mutexCache.Unlock()
 	}
@@ -321,6 +329,13 @@ func (this *websocketHandler) delSource(name string) (err error) {
 	}
 	this.hasSource = false
 	return
+}
+
+func (this *websocketHandler) sendSlice(slice *mp4.FMP4Slice) (err error) {
+	dataSend := make([]byte, len(slice.Data)+1)
+	dataSend[0] = byte(slice.Type)
+	copy(dataSend[1:], slice.Data)
+	return this.conn.WriteMessage(websocket.BinaryMessage, dataSend)
 }
 
 func (this *playInfo) reset() {
