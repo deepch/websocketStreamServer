@@ -42,7 +42,8 @@ func (this *streamSink) Stop(msg *wssAPI.Msg) (err error) {
 	}
 	msg = &wssAPI.Msg{}
 	msg.Type = wssAPI.MSG_PLAY_STOP
-	go this.sinker.ProcessMessage(msg)
+	//go this.sinker.ProcessMessage(msg)
+	this.sinker.ProcessMessage(msg)
 	return
 }
 

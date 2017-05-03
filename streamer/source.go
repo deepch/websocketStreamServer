@@ -146,24 +146,6 @@ func (this *streamSource) AddSink(id string, sinker wssAPI.Obj) (err error) {
 	return
 }
 
-func (this *streamSource) DelSink(id string) (err error, removeSrc bool) {
-	logger.LOGT(this.streamName + " del sink:" + id)
-	this.mutexSink.Lock()
-	defer this.mutexSink.Unlock()
-	_, exist := this.sinks[id]
-	if false == exist {
-		return errors.New("sink " + id + " not found"), false
-	}
-	//sink.Stop(nil)
-	//just delete ,not stop
-	delete(this.sinks, id)
-	//check if delete source
-	if 0 == len(this.sinks) && this.bProducer == false {
-		removeSrc = true
-	}
-	return
-}
-
 func (this *streamSource) clearCache() {
 	logger.LOGT("clear cache")
 	this.metadata = nil

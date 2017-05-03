@@ -153,6 +153,7 @@ func (this *RTMPHandler) ProcessMessage(msg *wssAPI.Msg) (err error) {
 	case wssAPI.MSG_PLAY_STOP:
 		this.mutexStatus.Lock()
 		defer this.mutexStatus.Unlock()
+		这里不是stop play,just srcLost
 		err = this.updateStatus(rtmp_status_beforePlay)
 		if err != nil {
 			logger.LOGE("stop playing failed")
@@ -415,6 +416,8 @@ func (this *RTMPHandler) handleInvoke(packet *RTMPPacket) (err error) {
 		this.sinkAdded = true
 		this.mutexStatus.Lock()
 	case "_error":
+		amfobj.Dump()
+	case "closeStream":
 		amfobj.Dump()
 	default:
 		logger.LOGW(fmt.Sprintf("rtmp method <%s> not processed", method.Value.StrValue))

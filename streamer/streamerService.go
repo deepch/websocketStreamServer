@@ -102,10 +102,12 @@ func DelSource(path string) (err error) {
 	if exist == false {
 		return errors.New(path + " not found")
 	} else {
-		remove := oldSrc.SetProducer(false)
-		if remove == true {
+		/*remove := */ oldSrc.SetProducer(false)
+		//if remove == true {
+		if 0 == len(oldSrc.sinks) {
 			delete(service.sources, path)
 		}
+		//}
 		return
 	}
 	return
@@ -139,13 +141,11 @@ func DelSink(path, sinkId string) (err error) {
 	if false == exist {
 		return errors.New("source not found in del sink")
 	} else {
-		removeSrc := false
-		err, removeSrc = src.DelSink(sinkId)
-		if err != nil {
-			logger.LOGE(err.Error())
-			return errors.New("delete sink:" + sinkId + " failed")
-		}
-		if true == removeSrc {
+
+		src.mutexSink.Lock()
+		defer src.mutexSink.Unlock()
+		delete(src.sinks, sinkId)
+		if 0 == len(src.sinks) {
 			delete(service.sources, path)
 		}
 	}
