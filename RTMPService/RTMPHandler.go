@@ -153,13 +153,7 @@ func (this *RTMPHandler) ProcessMessage(msg *wssAPI.Msg) (err error) {
 	case wssAPI.MSG_PLAY_STOP:
 		this.mutexStatus.Lock()
 		defer this.mutexStatus.Unlock()
-		这里不是stop play,just srcLost
-		err = this.updateStatus(rtmp_status_beforePlay)
-		if err != nil {
-			logger.LOGE("stop playing failed")
-			return
-		}
-		logger.LOGT("stop sink end")
+		this.sourceInvalid()
 		return
 	case wssAPI.MSG_PUBLISH_START:
 		this.mutexStatus.Lock()
@@ -186,6 +180,10 @@ func (this *RTMPHandler) ProcessMessage(msg *wssAPI.Msg) (err error) {
 		return
 	}
 	return
+}
+
+func (this *RTMPHandler) sourceInvalid() {
+
 }
 
 func (this *RTMPHandler) Status() int {
