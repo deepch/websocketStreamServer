@@ -145,7 +145,7 @@ func DelSink(path, sinkId string) (err error) {
 		src.mutexSink.Lock()
 		defer src.mutexSink.Unlock()
 		delete(src.sinks, sinkId)
-		if 0 == len(src.sinks) {
+		if 0 == len(src.sinks) && src.bProducer == false {
 			delete(service.sources, path)
 		}
 	}

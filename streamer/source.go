@@ -10,13 +10,14 @@ import (
 )
 
 type streamSource struct {
-	bProducer   bool
-	mutexSink   sync.RWMutex
-	sinks       map[string]*streamSink
-	streamName  string
-	metadata    *flv.FlvTag
-	audioHeader *flv.FlvTag
-	videoHeader *flv.FlvTag
+	bProducer    bool
+	mutexSink    sync.RWMutex
+	sinks        map[string]*streamSink
+	streamName   string
+	metadata     *flv.FlvTag
+	audioHeader  *flv.FlvTag
+	videoHeader  *flv.FlvTag
+	lastKeyFrame *flv.FlvTag
 }
 
 func (this *streamSource) Init(msg *wssAPI.Msg) (err error) {
@@ -56,6 +57,10 @@ func (this *streamSource) ProcessMessage(msg *wssAPI.Msg) (err error) {
 				this.videoHeader = tag.Copy()
 				this.videoHeader.Timestamp = 0
 			}
+			if (tag.Data[0] >> 4) == 1 {
+				this.lastKeyFrame = tag.Copy()
+			}
+
 		case flv.FLV_TAG_ScriptData:
 			if this.metadata == nil {
 				this.metadata = tag.Copy()
@@ -142,6 +147,11 @@ func (this *streamSource) AddSink(id string, sinker wssAPI.Obj) (err error) {
 			msg.Type = wssAPI.MSG_FLV_TAG
 			sink.ProcessMessage(msg)
 		}
+		if this.lastKeyFrame != nil {
+			msg.Param1 = this.lastKeyFrame
+			msg.Type = wssAPI.MSG_FLV_TAG
+			sink.ProcessMessage(msg)
+		}
 	}
 	return
 }
@@ -151,4 +161,5 @@ func (this *streamSource) clearCache() {
 	this.metadata = nil
 	this.audioHeader = nil
 	this.videoHeader = nil
+	this.lastKeyFrame = nil
 }

@@ -34,6 +34,8 @@ type RTMPHandler struct {
 	clientId     string
 	playInfo     RTMPPlayInfo
 	app          string
+	player       rtmpPlayer
+	publisher    rtmpPublisher
 }
 type RTMPPlayInfo struct {
 	playReset      bool
@@ -54,7 +56,9 @@ type RTMPPlayInfo struct {
 func (this *RTMPHandler) Init(msg *wssAPI.Msg) (err error) {
 	this.status = rtmp_status_idle
 	this.rtmpInstance = msg.Param1.(*RTMP)
-	this.playInfo.waitPlaying = new(sync.WaitGroup)
+	msgInit := &wssAPI.Msg{}
+	msgInit.Param1 = this.rtmpInstance
+	this.player.Init(msgInit)
 	return
 }
 
@@ -63,6 +67,18 @@ func (this *RTMPHandler) Start(msg *wssAPI.Msg) (err error) {
 }
 
 func (this *RTMPHandler) Stop(msg *wssAPI.Msg) (err error) {
+	if this.srcAdded {
+		streamer.DelSource(this.streamName)
+		logger.LOGT("del source:" + this.streamName)
+		this.srcAdded = false
+	}
+	if this.sinkAdded {
+		this.sinkAdded = false
+		streamer.DelSink(this.streamName, this.clientId)
+		logger.LOGT("del sinker:" + this.clientId)
+	}
+	this.player.Stop(msg)
+	this.publisher.Stop(msg)
 	return
 }
 
@@ -82,73 +98,10 @@ func (this *RTMPHandler) ProcessMessage(msg *wssAPI.Msg) (err error) {
 	switch msg.Type {
 	case wssAPI.MSG_FLV_TAG:
 		tag := msg.Param1.(*flv.FlvTag)
-		switch tag.TagType {
-		case flv.FLV_TAG_Audio:
-			if this.playInfo.audioHeader == nil {
-				this.playInfo.audioHeader = tag
-				this.playInfo.audioHeader.Timestamp = 0
-				return
-			}
-		case flv.FLV_TAG_Video:
-			if this.playInfo.videoHeader == nil {
-				this.playInfo.videoHeader = tag
-				this.playInfo.videoHeader.Timestamp = 0
-				return
-			}
-			if false == this.playInfo.keyFrameWrited {
-				if (tag.Data[0] >> 4) == 1 {
-					this.playInfo.keyFrameWrited = true
-					this.playInfo.beginTime = tag.Timestamp
-					this.playInfo.sendInitPackets()
-				} else {
-					return
-				}
-			}
+		this.player.appendFlvTag(tag)
 
-		case flv.FLV_TAG_ScriptData:
-			if this.playInfo.metadata == nil {
-				this.playInfo.metadata = tag
-				//				obj, err := AMF0DecodeObj(tag.Data)
-
-				//				if err == nil {
-				//					obj.Dump()
-				//					for v := obj.Props.Front(); v != nil; v = v.Next() {
-				//						vp := v.Value.(*AMF0Property)
-				//						if vp.PropType == AMF0_object {
-				//							enc := &AMF0Encoder{}
-				//							enc.Init()
-				//							enc.EncodeAMFObj(&vp.Value.ObjValue)
-				//							metadata, _ := enc.GetData()
-				//							this.rtmpInstance.OnMetadata(metadata)
-				//							obj, _ = AMF0DecodeObj(metadata)
-				//							logger.LOGT(string(metadata))
-				//							obj.Dump()
-				//							break
-				//						}
-				//					}
-				//				}
-
-				return nil
-			}
-		}
-		if false == this.playInfo.keyFrameWrited {
-			return
-		}
-		tag.Timestamp -= this.playInfo.beginTime
-		this.playInfo.mutexCache.Lock()
-		this.playInfo.cache.PushBack(tag)
-		this.playInfo.mutexCache.Unlock()
 	case wssAPI.MSG_PLAY_START:
-		this.mutexStatus.Lock()
-		defer this.mutexStatus.Unlock()
-		logger.LOGT("start play")
-		err = this.updateStatus(rtmp_status_playing)
-		if err != nil {
-			logger.LOGE("start play failed")
-			return
-		}
-
-		err = this.startPlaying()
+		this.player.startPlay()
 		return
 	case wssAPI.MSG_PLAY_STOP:
 		this.mutexStatus.Lock()
@@ -183,7 +136,8 @@ func (this *RTMPHandler) ProcessMessage(msg *wssAPI.Msg) (err error) {
 }
 
 func (this *RTMPHandler) sourceInvalid() {
-
+	logger.LOGT("stop play,keep sink")
+	this.player.stopPlay()
 }
 
 func (this *RTMPHandler) Status() int {
@@ -192,7 +146,8 @@ func (this *RTMPHandler) Status() int {
 
 func (this *RTMPHandler) HandleRTMPPacket(packet *RTMPPacket) (err error) {
 	if nil == packet {
-		this.updateStatus(rtmp_status_idle)
+		//this.updateStatus(rtmp_status_idle)
+		this.Stop(nil)
 		return
 	}
 	switch packet.MessageTypeId {
@@ -359,11 +314,11 @@ func (this *RTMPHandler) handleInvoke(packet *RTMPPacket) (err error) {
 		this.updateStatus(rtmp_status_idle)
 	//do nothing now
 	case "play":
-		this.mutexStatus.Lock()
-		defer this.mutexStatus.Unlock()
-		this.updateStatus(rtmp_status_beforePlay)
 		this.streamName = this.app + "/" + amfobj.AMF0GetPropByIndex(3).Value.StrValue
 		this.rtmpInstance.Link.Path = this.streamName
+		startTime := -2
+		duration := -1
+		reset := false
 		this.playInfo.startTime = -2
 		this.playInfo.duration = -1
 		this.playInfo.reset = false
@@ -378,6 +333,14 @@ func (this *RTMPHandler) handleInvoke(packet *RTMPPacket) (err error) {
 		}
 		if amfobj.Props.Len() >= 7 {
 			this.playInfo.reset = amfobj.AMF0GetPropByIndex(6).Value.BoolValue
+		}
+
+		//check player status,if playing,error
+		if false == this.player.setPlayParams(this.streamName, startTime, duration, reset) {
+			err = this.rtmpInstance.CmdStatus("error", "NetStream.Play.Failed",
+				"paly failed", this.streamName, 0, RTMP_channel_Invoke)
+
+			return nil
 		}
 		err = this.rtmpInstance.SendCtrl(RTMP_CTRL_streamBegin, 1, 0)
 		if err != nil {
@@ -401,18 +364,16 @@ func (this *RTMPHandler) handleInvoke(packet *RTMPPacket) (err error) {
 			logger.LOGE(err.Error())
 			return
 		}
+
 		this.clientId = wssAPI.GenerateGUID()
-		this.mutexStatus.Unlock()
 		err = streamer.AddSink(this.streamName, this.clientId, this)
 		if err != nil {
 			//404
 			err = this.rtmpInstance.CmdStatus("error", "NetStream.Play.StreamNotFound",
 				"paly failed", this.streamName, 0, RTMP_channel_Invoke)
-			this.mutexStatus.Lock()
 			return nil
 		}
 		this.sinkAdded = true
-		this.mutexStatus.Lock()
 	case "_error":
 		amfobj.Dump()
 	case "closeStream":
