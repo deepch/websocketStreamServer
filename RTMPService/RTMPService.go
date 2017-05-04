@@ -145,7 +145,7 @@ func (this *RTMPService) handleConnect(conn net.Conn) {
 	logger.LOGT("new connect:" + conn.RemoteAddr().String())
 	for {
 		var packet *RTMPPacket
-		packet, err = this.readPacket(rtmp, handler.Status())
+		packet, err = this.readPacket(rtmp, handler.isPlaying())
 		if err != nil {
 			handler.HandleRTMPPacket(nil)
 			return
@@ -157,8 +157,8 @@ func (this *RTMPService) handleConnect(conn net.Conn) {
 	}
 }
 
-func (this *RTMPService) readPacket(rtmp *RTMP, status int) (packet *RTMPPacket, err error) {
-	if status != rtmp_status_playing {
+func (this *RTMPService) readPacket(rtmp *RTMP, playing bool) (packet *RTMPPacket, err error) {
+	if false == playing {
 		err = rtmp.Conn.SetReadDeadline(time.Now().Add(time.Duration(serviceConfig.TimeoutSec) * time.Second))
 		if err != nil {
 			logger.LOGE(err.Error())

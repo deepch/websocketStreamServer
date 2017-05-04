@@ -23,7 +23,9 @@ func startServers() {
 	}
 	err = bus.Start(nil)
 	if err != nil {
+
 		logger.LOGE(err.Error())
+
 		return
 	}
 
