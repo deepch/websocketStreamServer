@@ -4,6 +4,7 @@ const (
 	OBJ_ServerBus       = "ServerBus"
 	OBJ_RTMPServer      = "RTMPServer"
 	OBJ_WebSocketServer = "WebsocketServer"
+	OBJ_BackendServer   = "BackendServer"
 )
 
 const (
