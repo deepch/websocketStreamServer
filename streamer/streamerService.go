@@ -14,15 +14,25 @@ const (
 )
 
 type StreamerService struct {
-	mutexSources sync.RWMutex
-	sources      map[string]*streamSource
+	mutexSources   sync.RWMutex
+	sources        map[string]*streamSource
+	mutexBlackList sync.RWMutex
+	blacks         map[string]string
+	mutexWhiteList sync.RWMutex
+	whites         map[string]string
+	blackOn        bool
+	whiteOn        bool
 }
 
 var service *StreamerService
 
 func (this *StreamerService) Init(msg *wssAPI.Msg) (err error) {
 	this.sources = make(map[string]*streamSource)
+	this.blacks = make(map[string]string)
+	this.whites = make(map[string]string)
 	service = this
+	this.blackOn = false
+	this.whiteOn = false
 	return
 }
 
@@ -40,10 +50,8 @@ func (this *StreamerService) GetType() string {
 
 func (this *StreamerService) HandleTask(task *wssAPI.Task) (err error) {
 	switch task.Type {
-	case wssAPI.TASK_AddSource:
-	case wssAPI.TASK_DelSource:
-	case wssAPI.TASK_AddSink:
-	case wssAPI.TASK_DelSink:
+	case wssAPI.TASK_StreamerManage:
+		return this.manageStreams(task)
 	default:
 		logger.LOGW(task.Type + " should not handle here")
 	}
@@ -51,6 +59,36 @@ func (this *StreamerService) HandleTask(task *wssAPI.Task) (err error) {
 }
 
 func (this *StreamerService) ProcessMessage(msg *wssAPI.Msg) (err error) {
+	return
+}
+
+func (this *StreamerService) manageStreams(task *wssAPI.Task) (err error) {
+	op, ok := task.Param1.(int)
+	if false == ok {
+		return errors.New("invalid task params")
+	}
+	switch op {
+	case wssAPI.Streamer_OP_set_blackList:
+		return this.setblackList(task)
+	case wssAPI.Streamer_OP_addBlackList:
+		return this.addBlackList(task)
+	case wssAPI.Streamer_OP_delBlackList:
+		return this.delBlackList(task)
+	case wssAPI.Streamer_OP_set_whiteList:
+		return this.setwhiteList(task)
+	case wssAPI.Streamer_OP_addWhiteList:
+		return this.addWhiteList(task)
+	case wssAPI.Streamer_OP_delWhiteList:
+		return this.delWhiteList(task)
+	case wssAPI.Streamer_OP_getLiveCount:
+		return this.getLiveCount(task)
+	case wssAPI.Streamer_OP_getLiveList:
+		return this.getLiveList(task)
+	case wssAPI.Streamer_OP_getLivePlayerCount:
+		return this.getPlayerCount(task)
+	default:
+		return errors.New("unknow op")
+	}
 	return
 }
 
@@ -63,7 +101,9 @@ func Addsource(path string) (src wssAPI.Obj, err error) {
 		err = errors.New("streamer invalid")
 		return
 	}
-
+	if false == service.checkBlack(path) || false == service.checkWhite(path) {
+		return nil, errors.New("bad name")
+	}
 	service.mutexSources.Lock()
 	defer service.mutexSources.Unlock()
 	logger.LOGT("add source:" + path)

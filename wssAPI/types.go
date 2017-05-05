@@ -7,10 +7,7 @@ const (
 )
 
 const (
-	TASK_AddSource = "AddSource" //param:source name  param2:sourceObj
-	TASK_DelSource = "DelSource" //param:source name
-	TASK_AddSink   = "AddSink"   //param:sink name param2:sinkObj
-	TASK_DelSink   = "DelSink"   //param:sink name
+	TASK_StreamerManage = "StreamerManage" //param:op
 )
 
 const (
@@ -19,4 +16,16 @@ const (
 	MSG_PUBLISH_STOP  = "NetStream.Publish.Stop"
 	MSG_PLAY_START    = "NetStream.Play.Start"
 	MSG_PLAY_STOP     = "NetStream.Play.Stop"
+)
+
+const (
+	Streamer_OP_set_blackList      = iota //param2 bool
+	Streamer_OP_addBlackList              //params blackList list
+	Streamer_OP_delBlackList              //params blackList list
+	Streamer_OP_set_whiteList             //param2 bool
+	Streamer_OP_addWhiteList              //params whiteList list
+	Streamer_OP_delWhiteList              //params whiteList list
+	Streamer_OP_getLiveCount              //return param2
+	Streamer_OP_getLiveList               //return params
+	Streamer_OP_getLivePlayerCount        //param2 streamName return param2
 )
