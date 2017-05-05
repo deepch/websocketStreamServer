@@ -18,6 +18,7 @@ import (
 type busConfig struct {
 	RTMPConfigName      string `json:"RTMP"`
 	WebSocketConfigName string `json:"WebSocket"`
+	BackendConfigName   string `json:"Backend"`
 	LogPath             string `json:"LogPath"`
 }
 
@@ -86,6 +87,16 @@ func (this *SvrBus) loadConfig() (err error) {
 		webSocketSvr.Init(msg)
 		this.mutexServices.Lock()
 		this.services[webSocketSvr.GetType()] = webSocketSvr
+		this.mutexServices.Unlock()
+	}
+
+	if len(cfg.BackendConfigName) >0 {
+		backendSvr := &backend.BackendService{}
+		msg := &wssAPI.Msg{}
+		msg.Param1 = cfg.BackendConfigName
+		backendSvr.Init(msg)
+		this.mutexServices.Lock()
+		this.services[backendSvr.GetType()] = backendSvr
 		this.mutexServices.Unlock()
 	}
 
