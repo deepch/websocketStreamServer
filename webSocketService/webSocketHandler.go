@@ -229,9 +229,9 @@ func (this *websocketHandler) stopPlay() {
 func (this *websocketHandler) threadPlay() {
 	this.waitPlaying.Add(1)
 	defer func() {
+		this.sendStreamEnd()
 		this.stPlay.reset()
 		this.waitPlaying.Done()
-		this.sendStreamEnd()
 	}()
 
 	this.sendStreamBegin()

@@ -73,10 +73,22 @@ func (this *websocketHandler) sendStreamBegin() {
 	dataSend[0] = WS_pkt_control
 	dataSend[1] = WS_ctrl_streamBegin
 	copy(dataSend[2:], jsonData)
+	defer func() {
+		if err := recover(); err != nil {
+			logger.LOGE(err)
+			logger.LOGE("recover")
+		}
+	}()
 	this.conn.WriteMessage(websocket.BinaryMessage, dataSend)
 }
 
 func (this *websocketHandler) sendStreamEnd() {
+	defer func() {
+		if err := recover(); err != nil {
+			logger.LOGE(err)
+			logger.LOGE("recover")
+		}
+	}()
 	stBegin := &WsStreamEnd{0}
 	jsonData, _ := json.Marshal(stBegin)
 	dataSend := make([]byte, len(jsonData)+2)
