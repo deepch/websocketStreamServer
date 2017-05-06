@@ -2,7 +2,8 @@ package backend
 
 type ResponseData struct {
 	Code int `json:"code"`
-	Data Data `json:"data"`
+	Data Data `json:"data,omitempty"`
+	Msg string `json:"msg"`
 }
 
 type Data struct {
@@ -12,13 +13,12 @@ type Data struct {
 
 type Usr struct {
 	Usrname string `json:"usrname"`
-	Password string `json:"password"`
-	Token string `json:"token“`
+	Token string `json:"token"`
 }
 
 type Action struct {
 	ActionCode int `json:"action_code"`
-	ActionToken string `json:"action_token`
+	ActionToken string `json:"action_token"`
 }
 
 const (
