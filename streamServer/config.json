@@ -1,7 +1,7 @@
 {
     "RTMP": "RTMPConfig.json",
     "WebSocket": "WebSocketConfig.json",
-    "Backend" : "BackendCofig.json",
+    "Backend" : "BackendConfig.json",
 	"Streamer":"Streamer.json",
 	"LogPath":"Log"
 }
