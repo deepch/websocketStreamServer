@@ -69,16 +69,6 @@ func getRequestData(req *http.Request) StreamManageRequestData {
 }
 
 func doManage(w http.ResponseWriter) {
-	task := &wssAPI.Task{}
-	task.Type = wssAPI.TASK_StreamerManage
-	task.Param1 = wssAPI.Streamer_OP_getLiveCount
-	task.Reciver = wssAPI.OBJ_StreamerServer
-
-	managers.HandleTask(task)
-
-	count := task.Param2.(int)
-	
-	println(count)
 
 
 }
