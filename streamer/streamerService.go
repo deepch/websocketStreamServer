@@ -175,12 +175,9 @@ func AddSink(path, sinkId string, sinker wssAPI.Obj) (err error) {
 	if false == exist {
 		app := strings.Split(path, "/")[0]
 		go service.createSrcFromUpstream(app)
+		service.mutexSources.Unlock()
+		defer service.mutexSources.Lock()
 
-		msg := &wssAPI.Msg{}
-		msg.Param1 = path
-		src.Init(msg)
-		src.SetProducer(true)
-		service.sources[path] = src
 		//!add to map
 		if src == nil {
 			err = errors.New("source not found in add sink")
