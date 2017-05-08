@@ -9,11 +9,6 @@ const (
 )
 
 const (
-	TASK_StreamerManage = "StreamerManage"       //param:op
-	TASK_StreamerUSC    = "StreamUpStreamConfig" //param:OP
-)
-
-const (
 	MSG_FLV_TAG       = "FLVTag"
 	MSG_PUBLISH_START = "NetStream.Publish.Start"
 	MSG_PUBLISH_STOP  = "NetStream.Publish.Stop"
@@ -23,11 +18,11 @@ const (
 
 const (
 	Streamer_OP_set_blackList      = iota //param2 bool
-	Streamer_OP_addBlackList              //params blackList list
-	Streamer_OP_delBlackList              //params blackList list
+	Streamer_OP_addBlackList              //param2 blackList list
+	Streamer_OP_delBlackList              //param2 blackList list
 	Streamer_OP_set_whiteList             //param2 bool
-	Streamer_OP_addWhiteList              //params whiteList list
-	Streamer_OP_delWhiteList              //params whiteList list
+	Streamer_OP_addWhiteList              //param2 whiteList list
+	Streamer_OP_delWhiteList              //param2 whiteList list
 	Streamer_OP_getLiveCount              //return param2
 	Streamer_OP_getLiveList               //return params
 	Streamer_OP_getLivePlayerCount        //param2 streamName return param2

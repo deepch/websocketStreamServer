@@ -52,53 +52,23 @@ func (this *StreamerService) GetType() string {
 }
 
 func (this *StreamerService) HandleTask(task *wssAPI.Task) (err error) {
-	switch task.Type {
-	case wssAPI.TASK_StreamerManage:
-		return this.manageStreams(task)
-	case wssAPI.TASK_StreamerUSC:
-		return this.streamerUSC(task)
-	default:
-		logger.LOGW(task.Type + " should not handle here")
-	}
-	task = &wssAPI.Task{}
-	task.Reciver = wssAPI.OBJ_StreamerServer
-	task.Param1 = wssAPI.Streamer_OP_addBlackList
+	//	switch task.Type {
+	//	case wssAPI.TASK_StreamerManage:
+	//		return this.manageStreams(task)
+	//	case wssAPI.TASK_StreamerUSC:
+	//		return this.streamerUSC(task)
+	//	default:
+	//		logger.LOGW(task.Type + " should not handle here")
+	//	}
+	//	task = &wssAPI.Task{}
+	//	task.Reciver = wssAPI.OBJ_StreamerServer
+	//	task.Param1 = wssAPI.Streamer_OP_addBlackList
 	//task.Params //一个list
 
 	return
 }
 
 func (this *StreamerService) ProcessMessage(msg *wssAPI.Msg) (err error) {
-	return
-}
-
-func (this *StreamerService) manageStreams(task *wssAPI.Task) (err error) {
-	op, ok := task.Param1.(int)
-	if false == ok {
-		return errors.New("invalid task params")
-	}
-	switch op {
-	case wssAPI.Streamer_OP_set_blackList:
-		return this.setblackList(task)
-	case wssAPI.Streamer_OP_addBlackList:
-		return this.addBlackList(task)
-	case wssAPI.Streamer_OP_delBlackList:
-		return this.delBlackList(task)
-	case wssAPI.Streamer_OP_set_whiteList:
-		return this.setwhiteList(task)
-	case wssAPI.Streamer_OP_addWhiteList:
-		return this.addWhiteList(task)
-	case wssAPI.Streamer_OP_delWhiteList:
-		return this.delWhiteList(task)
-	case wssAPI.Streamer_OP_getLiveCount:
-		return this.getLiveCount(task)
-	case wssAPI.Streamer_OP_getLiveList:
-		return this.getLiveList(task)
-	case wssAPI.Streamer_OP_getLivePlayerCount:
-		return this.getPlayerCount(task)
-	default:
-		return errors.New("unknown op")
-	}
 	return
 }
 
@@ -129,11 +99,19 @@ func (this *StreamerService) streamerUSC(task *wssAPI.Task) (err error) {
 		}
 		this.mutexUpStream.Lock()
 		defer this.mutexUpStream.Unlock()
+		_, exist := this.upApps[app]
+		if exist == false {
+			return errors.New(app + " not found")
+		}
 		delete(this.upApps, app)
 		return
 	default:
 		return errors.New("unknown op")
 	}
+	return
+}
+
+func (this *StreamerService) createSrcFromUpstream(path string) (src *streamSource) {
 	return
 }
 
@@ -146,7 +124,7 @@ func Addsource(path string) (src wssAPI.Obj, err error) {
 		err = errors.New("streamer invalid")
 		return
 	}
-	if false == service.checkBlack(path) || false == service.checkWhite(path) {
+	if false == CheckBlack(path) || false == CheckWhite(path) {
 		return nil, errors.New("bad name")
 	}
 	service.mutexSources.Lock()
@@ -208,8 +186,11 @@ func AddSink(path, sinkId string, sinker wssAPI.Obj) (err error) {
 	defer service.mutexSources.Unlock()
 	src, exist := service.sources[path]
 	if false == exist {
-		err = errors.New("source not found in add sink")
-		return
+		src = service.createSrcFromUpstream(path)
+		if src == nil {
+			err = errors.New("source not found in add sink")
+		}
+		return src.AddSink(sinkId, sinker)
 	} else {
 		return src.AddSink(sinkId, sinker)
 	}

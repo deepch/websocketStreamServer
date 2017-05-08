@@ -12,7 +12,7 @@ type Task struct {
 	Version string
 	Param1  interface{}
 	Param2  interface{}
-	Params  *list.List
+	Result  interface{}
 }
 
 //msg
