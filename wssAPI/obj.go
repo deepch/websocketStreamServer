@@ -32,6 +32,7 @@ type Obj interface {
 	GetType() string
 	HandleTask(task *Task) error
 	ProcessMessage(msg *Msg) error
+	SetParent(parent Obj)
 }
 
 //func (this *tmp) Init(msg *wssAPI.Msg) (err error) {

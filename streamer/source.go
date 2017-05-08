@@ -10,6 +10,7 @@ import (
 )
 
 type streamSource struct {
+	parent       wssAPI.Obj
 	bProducer    bool
 	mutexSink    sync.RWMutex
 	sinks        map[string]*streamSink
@@ -162,4 +163,8 @@ func (this *streamSource) clearCache() {
 	this.audioHeader = nil
 	this.videoHeader = nil
 	this.lastKeyFrame = nil
+}
+
+func (this *streamSource) SetParent(parent wssAPI.Obj) {
+	this.parent = parent
 }

@@ -183,3 +183,7 @@ func (this *StreamerService) checkWhite(path string) bool {
 	}
 	return false
 }
+
+func (this *StreamerService) SetParent(parent wssAPI.Obj) {
+	this.parent = parent
+}

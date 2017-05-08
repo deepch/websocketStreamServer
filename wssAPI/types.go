@@ -5,10 +5,12 @@ const (
 	OBJ_RTMPServer      = "RTMPServer"
 	OBJ_WebSocketServer = "WebsocketServer"
 	OBJ_BackendServer   = "BackendServer"
+	OBJ_StreamerServer  = "StreamerServer"
 )
 
 const (
-	TASK_StreamerManage = "StreamerManage" //param:op
+	TASK_StreamerManage = "StreamerManage"       //param:op
+	TASK_StreamerUSC    = "StreamUpStreamConfig" //param:OP
 )
 
 const (
@@ -29,4 +31,22 @@ const (
 	Streamer_OP_getLiveCount              //return param2
 	Streamer_OP_getLiveList               //return params
 	Streamer_OP_getLivePlayerCount        //param2 streamName return param2
+	Streamer_OP_AddUpStreamAddress        //param2 *UpStreamAddr
+	Streamer_OP_DelUpStreamAddress        //param2 appName
 )
+
+type UpStreamAddr struct {
+	Protocol string
+	App      string
+	Address  string
+	Port     int
+}
+
+func (this *UpStreamAddr) Copy() (out *UpStreamAddr) {
+	out = &UpStreamAddr{}
+	out.Address = this.Address
+	out.App = this.App
+	out.Protocol = this.Protocol
+	out.Port = this.Port
+	return
+}

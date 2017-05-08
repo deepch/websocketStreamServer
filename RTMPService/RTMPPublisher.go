@@ -8,6 +8,7 @@ import (
 )
 
 type rtmpPublisher struct {
+	parent      wssAPI.Obj
 	bPublishing bool
 	mutexStatus sync.RWMutex
 	rtmp        *RTMP
@@ -85,4 +86,7 @@ func (this *rtmpPublisher) stopPublish() bool {
 	}
 	this.bPublishing = false
 	return true
+}
+func (this *rtmpPublisher) SetParent(parent wssAPI.Obj) {
+	this.parent = parent
 }

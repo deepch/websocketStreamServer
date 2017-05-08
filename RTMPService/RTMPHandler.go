@@ -12,6 +12,7 @@ import (
 )
 
 type RTMPHandler struct {
+	parent       wssAPI.Obj
 	mutexStatus  sync.RWMutex
 	rtmpInstance *RTMP
 	source       wssAPI.Obj
@@ -392,4 +393,8 @@ func (this *RTMPHandler) startPublishing() (err error) {
 
 func (this *RTMPHandler) isPlaying() bool {
 	return this.player.IsPlaying()
+}
+
+func (this *RTMPHandler) SetParent(parent wssAPI.Obj) {
+	this.parent = parent
 }

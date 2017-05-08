@@ -1,32 +1,30 @@
 package backend
 
 import (
-	"wssAPI"
-	"logger"
-	"errors"
 	"encoding/json"
-	"strconv"
+	"errors"
+	"logger"
 	"net/http"
+	"strconv"
+	"wssAPI"
 )
 
-type BackendHander interface {
-	Init (msg *wssAPI.Msg) error
-	GetRoute()string
-}
-
-type  BackendService struct {
+type BackendService struct {
+	parent wssAPI.Obj
 }
 
 type BackendConfig struct {
-	Port	int	`json:"Port"`
-	RootName string `json:"Usr"`
-	RootPwd string `json:"Pwd"`
+	Port        int    `json:"Port"`
+	RootName    string `json:"Usr"`
+	RootPwd     string `json:"Pwd"`
+	ActionToken string
 }
 
+var service *BackendService
 var serviceConfig BackendConfig
 
-func (this *BackendService) Init(msg *wssAPI.Msg) (err error){
-	if msg == nil || msg.Param1 == nil{
+func (this *BackendService) Init(msg *wssAPI.Msg) (err error) {
+	if msg == nil || msg.Param1 == nil {
 		logger.LOGE("init backend service failed")
 		return errors.New("invalid param!")
 	}
@@ -37,53 +35,63 @@ func (this *BackendService) Init(msg *wssAPI.Msg) (err error){
 		logger.LOGE(err.Error())
 		return errors.New("load backend config failed")
 	}
-
-
+	service = this
 
 	go func() {
 		strPort := ":" + strconv.Itoa(serviceConfig.Port)
-		handlers := backendHandlerInit()
-		for _, item := range handlers{
-			backHandler := item.(BackendHander)
-			http.Handle(backHandler.GetRoute(),http.StripPrefix(backHandler.GetRoute(),backHandler.(http.Handler)))
-		}
-		err = http.ListenAndServe(strPort,nil)
+		//http.Handle("/admin",http.StripPrefix("/admin",this))
+		http.Handle("/admin/login", http.StripPrefix("/admin/login", this))
+		err = http.ListenAndServe(strPort, nil)
 		if err != nil {
 			logger.LOGE("start backend serve failed")
 		}
-		}()
+	}()
 	return
 }
 
-func (this *BackendService) loadConfigFile(fileName string) (err error)  {
+func (this *BackendService) SetParent(parent wssAPI.Obj) {
+	this.parent = parent
+}
+
+func (this *BackendService) loadConfigFile(fileName string) (err error) {
 	data, err := wssAPI.ReadFileAll(fileName)
-	if err !=nil {
+	if err != nil {
 		return
 	}
 
-	err = json.Unmarshal(data,&serviceConfig)
-	if err !=nil {
+	err = json.Unmarshal(data, &serviceConfig)
+	if err != nil {
 		return
 	}
 	return
 }
 
+//handle
+func (this *BackendService) ServeHTTP(w http.ResponseWriter, req *http.Request) {
+	if req.RequestURI == "/admin/login" {
+		this.HandleLoginRequest(w, req)
+	}
+}
 
-
-func (this *BackendService)Start(msg *wssAPI.Msg) (err error){
+func (this *BackendService) Start(msg *wssAPI.Msg) (err error) {
 	return
 }
 
-func (this *BackendService) Stop (msg *wssAPI.Msg) (err error){
-	return ;
+func (this *BackendService) Stop(msg *wssAPI.Msg) (err error) {
+	return
 }
 
-
-func (this *BackendService) GetType() string{
+func (this *BackendService) GetType() string {
 	return wssAPI.OBJ_BackendServer
 }
 
 func (this *BackendService) HandleTask(task *wssAPI.Task) (err error) {
+	if task.Reciver == this.GetType() {
+		return
+	}
+	if nil != this.parent {
+		return this.parent.HandleTask(task)
+	}
 	return
 }
 
@@ -91,31 +99,34 @@ func (this *BackendService) ProcessMessage(msg *wssAPI.Msg) (err error) {
 	return
 }
 
-
-
-func backendHandlerInit()([]BackendHander){
-	handers := make([]BackendHander,0)
-
-	adminLoginHandle := &AdminLoginHandler{}
-	lgData := &wssAPI.Msg{}
-	loginData := AdminLoginData{}
-	loginData.password = serviceConfig.RootPwd
-	loginData.username = serviceConfig.RootName
-	lgData.Param1 = loginData
-	err :=adminLoginHandle.Init(lgData)
-	if err == nil {
-		handers = append(handers,adminLoginHandle)
-	}else {
-		if err != nil {
-		logger.LOGE("add adminLoginHandle error!")
+func (this *BackendService) HandleLoginRequest(w http.ResponseWriter, req *http.Request) {
+	if req.Method != "POST" {
+		result, err := badRequest(1, "bad request")
+		SendResponse(result, err, w)
+	} else {
+		username := req.PostFormValue("username")
+		password := req.PostFormValue("password")
+		if len(username) > 0 && len(password) > 0 {
+			ispass, authToken := compAuth(username, password)
+			if ispass {
+				serviceConfig.ActionToken = authToken
+				responseData, err := passAuthResponseData(authToken)
+				SendResponse(responseData, err, w)
+			} else {
+				responseData, err := badRequest(2, "login auth error")
+				SendResponse(responseData, err, w)
+			}
+		} else {
+			responseData, err := badRequest(2, "login auth error")
+			SendResponse(responseData, err, w)
 		}
 	}
-
-	streamManagerHandle := &AdminStreamManageHandler{}
-	streamManagerHandle.Init(nil)
-	handers = append(handers,streamManagerHandle)
-
-	return handers
 }
 
-
+func badRequest(code int, msg string) ([]byte, error) {
+	result := &ResponseData{}
+	result.Code = code
+	result.Msg = msg
+	bytes, err := json.Marshal(result)
+	return bytes, err
+}

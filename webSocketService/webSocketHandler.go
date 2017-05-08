@@ -21,6 +21,7 @@ const (
 )
 
 type websocketHandler struct {
+	parent       wssAPI.Obj
 	conn         *websocket.Conn
 	app          string
 	streamName   string
@@ -336,6 +337,10 @@ func (this *websocketHandler) sendSlice(slice *mp4.FMP4Slice) (err error) {
 	dataSend[0] = byte(slice.Type)
 	copy(dataSend[1:], slice.Data)
 	return this.conn.WriteMessage(websocket.BinaryMessage, dataSend)
+}
+
+func (this *websocketHandler) SetParent(parent wssAPI.Obj) {
+	this.parent = parent
 }
 
 func (this *playInfo) reset() {

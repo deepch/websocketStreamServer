@@ -17,6 +17,7 @@ const (
 )
 
 type rtmpPlayer struct {
+	parent         wssAPI.Obj
 	playStatus     int
 	mutexStatus    sync.RWMutex
 	playing        bool //true for thread send playing data
@@ -245,4 +246,8 @@ func (this *rtmpPlayer) sendPlayStarts() {
 	}
 
 	logger.LOGT("start playing")
+}
+
+func (this *rtmpPlayer) SetParent(parent wssAPI.Obj) {
+	this.parent = parent
 }

@@ -13,6 +13,7 @@ import (
 )
 
 type WebSocketService struct {
+	parent wssAPI.Obj
 }
 
 type WebSocketConfig struct {
@@ -138,4 +139,8 @@ func (this *WebSocketService) handleConn(conn *websocket.Conn, req *http.Request
 		default:
 		}
 	}
+}
+
+func (this *WebSocketService) SetParent(parent wssAPI.Obj) {
+	this.parent = parent
 }

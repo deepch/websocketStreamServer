@@ -91,7 +91,7 @@ func (this *SvrBus) loadConfig() (err error) {
 		this.mutexServices.Unlock()
 	}
 
-	if len(cfg.BackendConfigName) >0 {
+	if len(cfg.BackendConfigName) > 0 {
 		backendSvr := &backend.BackendService{}
 		msg := &wssAPI.Msg{}
 		msg.Param1 = cfg.BackendConfigName
@@ -143,13 +143,14 @@ func (this *SvrBus) createLogFile(logPath string) {
 	}()
 }
 
-func (this *SvrBus) Start(msg *wssAPI.Obj) (err error) {
+func (this *SvrBus) Start(msg *wssAPI.Msg) (err error) {
 	//if false {
 	runtime.GOMAXPROCS(runtime.NumCPU())
 	//}
 	this.mutexServices.RLock()
 	defer this.mutexServices.RUnlock()
 	for k, v := range this.services {
+		v.SetParent(this)
 		err = v.Start(nil)
 		if err != nil {
 			logger.LOGE("start " + k + " failed:" + err.Error())
@@ -160,7 +161,7 @@ func (this *SvrBus) Start(msg *wssAPI.Obj) (err error) {
 	return
 }
 
-func (this *SvrBus) Stop(msg *wssAPI.Obj) (err error) {
+func (this *SvrBus) Stop(msg *wssAPI.Msg) (err error) {
 	this.mutexServices.RLock()
 	defer this.mutexServices.RUnlock()
 	for _, v := range this.services {
@@ -185,4 +186,8 @@ func (this *SvrBus) HandleTask(task *wssAPI.Task) (err error) {
 
 func (this *SvrBus) ProcessMessage(msg *wssAPI.Msg) (err error) {
 	return nil
+}
+
+func (this *SvrBus) SetParent(arent wssAPI.Obj) {
+
 }

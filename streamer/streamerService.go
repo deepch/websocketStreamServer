@@ -8,12 +8,12 @@ import (
 )
 
 const (
-	streamTypeService = "streamService"
-	streamTypeSource  = "streamSource"
-	streamTypeSink    = "streamSink"
+	streamTypeSource = "streamSource"
+	streamTypeSink   = "streamSink"
 )
 
 type StreamerService struct {
+	parent         wssAPI.Obj
 	mutexSources   sync.RWMutex
 	sources        map[string]*streamSource
 	mutexBlackList sync.RWMutex
@@ -22,6 +22,8 @@ type StreamerService struct {
 	whites         map[string]string
 	blackOn        bool
 	whiteOn        bool
+	mutexUpStream  sync.RWMutex
+	upApps         map[string]*wssAPI.UpStreamAddr
 }
 
 var service *StreamerService
@@ -30,6 +32,7 @@ func (this *StreamerService) Init(msg *wssAPI.Msg) (err error) {
 	this.sources = make(map[string]*streamSource)
 	this.blacks = make(map[string]string)
 	this.whites = make(map[string]string)
+	this.upApps = make(map[string]*wssAPI.UpStreamAddr)
 	service = this
 	this.blackOn = false
 	this.whiteOn = false
@@ -45,16 +48,23 @@ func (this *StreamerService) Stop(msg *wssAPI.Msg) (err error) {
 }
 
 func (this *StreamerService) GetType() string {
-	return streamTypeService
+	return wssAPI.OBJ_StreamerServer
 }
 
 func (this *StreamerService) HandleTask(task *wssAPI.Task) (err error) {
 	switch task.Type {
 	case wssAPI.TASK_StreamerManage:
 		return this.manageStreams(task)
+	case wssAPI.TASK_StreamerUSC:
+		return this.streamerUSC(task)
 	default:
 		logger.LOGW(task.Type + " should not handle here")
 	}
+	task = &wssAPI.Task{}
+	task.Reciver = wssAPI.OBJ_StreamerServer
+	task.Param1 = wssAPI.Streamer_OP_addBlackList
+	//task.Params //一个list
+
 	return
 }
 
@@ -87,7 +97,42 @@ func (this *StreamerService) manageStreams(task *wssAPI.Task) (err error) {
 	case wssAPI.Streamer_OP_getLivePlayerCount:
 		return this.getPlayerCount(task)
 	default:
-		return errors.New("unknow op")
+		return errors.New("unknown op")
+	}
+	return
+}
+
+func (this *StreamerService) streamerUSC(task *wssAPI.Task) (err error) {
+	op, ok := task.Param1.(int)
+	if false == ok {
+		return errors.New("invalid param streamUSC")
+	}
+	switch op {
+	case wssAPI.Streamer_OP_AddUpStreamAddress:
+		addr, ok := task.Param2.(*wssAPI.UpStreamAddr)
+		if false == ok {
+			return errors.New("bad param for add USC")
+		}
+		this.mutexUpStream.Lock()
+		defer this.mutexUpStream.Unlock()
+		_, exist := this.upApps[addr.App]
+		if true == exist {
+			return errors.New("app " + addr.App + " existed")
+		}
+		this.upApps[addr.App] = addr.Copy()
+		return
+	case wssAPI.Streamer_OP_DelUpStreamAddress:
+
+		app, ok := task.Param2.(string)
+		if false == ok {
+			return errors.New("bad app for del USC")
+		}
+		this.mutexUpStream.Lock()
+		defer this.mutexUpStream.Unlock()
+		delete(this.upApps, app)
+		return
+	default:
+		return errors.New("unknown op")
 	}
 	return
 }

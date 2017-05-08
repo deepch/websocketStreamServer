@@ -9,6 +9,7 @@ import (
 type streamSink struct {
 	id     string
 	sinker wssAPI.Obj
+	parent wssAPI.Obj
 }
 
 func (this *streamSink) Init(msg *wssAPI.Msg) (err error) {
@@ -65,4 +66,8 @@ func (this *streamSink) ProcessMessage(msg *wssAPI.Msg) (err error) {
 
 func (this *streamSink) Id() string {
 	return this.id
+}
+
+func (this *streamSink) SetParent(parent wssAPI.Obj) {
+	this.parent = parent
 }
