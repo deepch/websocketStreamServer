@@ -135,6 +135,7 @@ func GetPlayerCount(name string) (count int, err error) {
 	} else {
 		count = len(src.sinks)
 	}
+
 	return
 }
 
@@ -164,6 +165,30 @@ func CheckWhite(path string) bool {
 		}
 	}
 	return false
+}
+
+func AddUpStreamApp(addr *wssAPI.UpStreamAddr) (err error) {
+
+	service.mutexUpStream.Lock()
+	defer service.mutexUpStream.Unlock()
+	_, exist := service.upApps[addr.App]
+	if true == exist {
+		return errors.New("app " + addr.App + " existed")
+	}
+	service.upApps[addr.App] = addr.Copy()
+	return
+}
+
+func DelUpStreamApp(app string) (err error) {
+
+	service.mutexUpStream.Lock()
+	defer service.mutexUpStream.Unlock()
+	_, exist := service.upApps[app]
+	if exist == false {
+		return errors.New(app + " not found")
+	}
+	delete(service.upApps, app)
+	return
 }
 
 func (this *StreamerService) SetParent(parent wssAPI.Obj) {

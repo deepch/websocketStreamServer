@@ -2,7 +2,9 @@ package streamer
 
 import (
 	"errors"
+	"fmt"
 	"logger"
+	"strings"
 	"sync"
 	"wssAPI"
 )
@@ -72,47 +74,32 @@ func (this *StreamerService) ProcessMessage(msg *wssAPI.Msg) (err error) {
 	return
 }
 
-func (this *StreamerService) streamerUSC(task *wssAPI.Task) (err error) {
-	op, ok := task.Param1.(int)
-	if false == ok {
-		return errors.New("invalid param streamUSC")
+func (this *StreamerService) createSrcFromUpstream(app string) (src *streamSource) {
+	this.mutexUpStream.RLock()
+	addr, exist := this.upApps[app]
+	if exist == false {
+		logger.LOGE(fmt.Sprintf("%s upstream not found", app))
+		this.mutexUpStream.RUnlock()
+		return nil
 	}
-	switch op {
-	case wssAPI.Streamer_OP_AddUpStreamAddress:
-		addr, ok := task.Param2.(*wssAPI.UpStreamAddr)
-		if false == ok {
-			return errors.New("bad param for add USC")
-		}
-		this.mutexUpStream.Lock()
-		defer this.mutexUpStream.Unlock()
-		_, exist := this.upApps[addr.App]
-		if true == exist {
-			return errors.New("app " + addr.App + " existed")
-		}
-		this.upApps[addr.App] = addr.Copy()
-		return
-	case wssAPI.Streamer_OP_DelUpStreamAddress:
+	this.mutexUpStream.RUnlock()
+	switch addr.Protocol {
+	case "RTMP":
+		task := &wssAPI.Task{}
+		task.Type = wssAPI.TASK_PullRTMPLive
+		task.Reciver = wssAPI.OBJ_RTMPServer
+		task.Param1 = addr
+		this.parent.HandleTask(task)
 
-		app, ok := task.Param2.(string)
-		if false == ok {
-			return errors.New("bad app for del USC")
-		}
-		this.mutexUpStream.Lock()
-		defer this.mutexUpStream.Unlock()
-		_, exist := this.upApps[app]
-		if exist == false {
-			return errors.New(app + " not found")
-		}
-		delete(this.upApps, app)
-		return
 	default:
-		return errors.New("unknown op")
+		logger.LOGE(fmt.Sprintf("%s not support now...", addr.Protocol))
+		return nil
 	}
 	return
 }
 
-func (this *StreamerService) createSrcFromUpstream(path string) (src *streamSource) {
-	return
+func (this *StreamerService) checkUpStreamCreated(path string) (src *streamSource) {
+	//usr chan
 }
 
 //src control sink
@@ -186,7 +173,12 @@ func AddSink(path, sinkId string, sinker wssAPI.Obj) (err error) {
 	defer service.mutexSources.Unlock()
 	src, exist := service.sources[path]
 	if false == exist {
-		src = service.createSrcFromUpstream(path)
+		app := strings.Split(path, "/")[0]
+		go service.createSrcFromUpstream(app)
+		service.mutexSources.Unlock()
+		defer service.mutexSources.Lock()
+
+		//!add to map
 		if src == nil {
 			err = errors.New("source not found in add sink")
 		}

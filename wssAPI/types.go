@@ -17,6 +17,10 @@ const (
 )
 
 const (
+	TASK_PullRTMPLive = "PullRTMPPlive" //param UpStreamAddr,result streamSrc
+)
+
+const (
 	Streamer_OP_set_blackList      = iota //param2 bool
 	Streamer_OP_addBlackList              //param2 blackList list
 	Streamer_OP_delBlackList              //param2 blackList list
