@@ -8,7 +8,7 @@ import (
 	"logger"
 	"mediaTypes/flv"
 	"mediaTypes/mp4"
-	"streamer"
+	//"streamer"
 	"sync"
 	"time"
 	"wssAPI"
@@ -266,69 +266,69 @@ func (this *websocketHandler) stopPublish() {
 }
 
 func (this *websocketHandler) delSink(name, id string) (err error) {
-	this.mutexbSink.Lock()
-	defer this.mutexbSink.Unlock()
-	if this.hasSink {
-		err = streamer.DelSink(name, id)
-		if err != nil {
-			logger.LOGE("delete sink:" + name + " failed --" + id)
-			logger.LOGE(err.Error())
-		} else {
+	//	this.mutexbSink.Lock()
+	//	defer this.mutexbSink.Unlock()
+	//	if this.hasSink {
+	//		err = streamer.DelSink(name, id)
+	//		if err != nil {
+	//			logger.LOGE("delete sink:" + name + " failed --" + id)
+	//			logger.LOGE(err.Error())
+	//		} else {
 
-			logger.LOGT("del sink:" + id)
-		}
-		this.hasSink = false
-	} else {
-		err = errors.New("del not existed sink")
-	}
+	//			logger.LOGT("del sink:" + id)
+	//		}
+	//		this.hasSink = false
+	//	} else {
+	//		err = errors.New("del not existed sink")
+	//	}
 	return
 }
 
 func (this *websocketHandler) addSink(name, id string) (err error) {
-	this.mutexbSink.Lock()
-	defer this.mutexbSink.Unlock()
-	if false == this.hasSink {
-		err = streamer.AddSink(name, id, this)
-		if err != nil {
-			logger.LOGE(fmt.Sprintf("add sink %s to %s failed", name, id))
-			return
-		}
-		this.hasSink = true
-	} else {
-		logger.LOGE("sink not deleted")
-		err = errors.New("sink not deleted")
-	}
+	//	this.mutexbSink.Lock()
+	//	defer this.mutexbSink.Unlock()
+	//	if false == this.hasSink {
+	//		err = streamer.AddSink(name, id, this)
+	//		if err != nil {
+	//			logger.LOGE(fmt.Sprintf("add sink %s to %s failed", name, id))
+	//			return
+	//		}
+	//		this.hasSink = true
+	//	} else {
+	//		logger.LOGE("sink not deleted")
+	//		err = errors.New("sink not deleted")
+	//	}
 	return
 }
 
 func (this *websocketHandler) addSource(name string) (err error) {
-	this.mutexbSource.Lock()
-	defer this.mutexbSource.Unlock()
-	if this.hasSource {
-		logger.LOGE("source existed")
-		return errors.New("add existed source")
-	}
-	this.source, err = streamer.Addsource(name)
-	if err != nil {
-		logger.LOGE("add source:" + name + " failed")
-		return
-	}
-	this.hasSource = true
+	//	this.mutexbSource.Lock()
+	//	defer this.mutexbSource.Unlock()
+	//	if this.hasSource {
+	//		logger.LOGE("source existed")
+	//		return errors.New("add existed source")
+	//	}
+	//	this.source, err = streamer.Addsource(name)
+	//	if err != nil {
+	//		logger.LOGE("add source:" + name + " failed")
+	//		return
+	//	}
+	//	this.hasSource = true
 	return
 }
 
 func (this *websocketHandler) delSource(name string) (err error) {
-	this.mutexbSource.Lock()
-	defer this.mutexbSource.Unlock()
-	if this.hasSource == false {
-		return errors.New("del not existed source")
-	}
-	err = streamer.DelSource(name)
-	if err != nil {
-		logger.LOGE("del source:" + name + " failed")
-		return
-	}
-	this.hasSource = false
+	//	this.mutexbSource.Lock()
+	//	defer this.mutexbSource.Unlock()
+	//	if this.hasSource == false {
+	//		return errors.New("del not existed source")
+	//	}
+	//	err = streamer.DelSource(name)
+	//	if err != nil {
+	//		logger.LOGE("del source:" + name + " failed")
+	//		return
+	//	}
+	//	this.hasSource = false
 	return
 }
 

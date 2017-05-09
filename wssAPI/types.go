@@ -20,20 +20,6 @@ const (
 	TASK_PullRTMPLive = "PullRTMPPlive" //param UpStreamAddr,result streamSrc
 )
 
-const (
-	Streamer_OP_set_blackList      = iota //param2 bool
-	Streamer_OP_addBlackList              //param2 blackList list
-	Streamer_OP_delBlackList              //param2 blackList list
-	Streamer_OP_set_whiteList             //param2 bool
-	Streamer_OP_addWhiteList              //param2 whiteList list
-	Streamer_OP_delWhiteList              //param2 whiteList list
-	Streamer_OP_getLiveCount              //return param2
-	Streamer_OP_getLiveList               //return params
-	Streamer_OP_getLivePlayerCount        //param2 streamName return param2
-	Streamer_OP_AddUpStreamAddress        //param2 *UpStreamAddr
-	Streamer_OP_DelUpStreamAddress        //param2 appName
-)
-
 type UpStreamAddr struct {
 	Protocol string
 	App      string

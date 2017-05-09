@@ -67,7 +67,7 @@ func (this *WebSocketService) GetType() string {
 	return wssAPI.OBJ_WebSocketServer
 }
 
-func (this *WebSocketService) HandleTask(task *wssAPI.Task) (err error) {
+func (this *WebSocketService) HandleTask(task wssAPI.Task) (err error) {
 	return
 }
 

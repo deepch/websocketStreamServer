@@ -1,9 +1,11 @@
 package backend
 
 import (
+	"fmt"
 	"net/http"
 	"strconv"
-	"streamer"
+	//"streamer"
+	"events/eLiveListCtrl"
 	"wssAPI"
 )
 
@@ -15,12 +17,12 @@ type StreamManageRequestData struct {
 	Action Action
 }
 
-var managers streamer.StreamerService
+//var managers streamer.StreamerService
 
 func (this *AdminStreamManageHandler) Init(data *wssAPI.Msg) (err error) {
 	this.Route = "/admin/stream/manage"
-	managers := &streamer.StreamerService{}
-	managers.Init(nil)
+	//	managers := &streamer.StreamerService{}
+	//	managers.Init(nil)
 	return
 }
 
@@ -69,6 +71,6 @@ func getRequestData(req *http.Request) StreamManageRequestData {
 }
 
 func doManage(w http.ResponseWriter) {
-
-
+	eve := eLiveListCtrl.EveGetLiveList{}
+	fmt.Println(eve)
 }

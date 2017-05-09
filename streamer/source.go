@@ -39,7 +39,7 @@ func (this *streamSource) GetType() string {
 	return streamTypeSource
 }
 
-func (this *streamSource) HandleTask(task *wssAPI.Task) (err error) {
+func (this *streamSource) HandleTask(task wssAPI.Task) (err error) {
 	return
 }
 

@@ -2,17 +2,13 @@ package wssAPI
 
 import (
 	"container/list"
+	"errors"
 )
 
 //task
-type Task struct {
-	Sender  string
-	Reciver string
-	Type    string
-	Version string
-	Param1  interface{}
-	Param2  interface{}
-	Result  interface{}
+type Task interface {
+	Receiver() string
+	Type() string
 }
 
 //msg
@@ -30,9 +26,22 @@ type Obj interface {
 	Start(msg *Msg) error
 	Stop(msg *Msg) error
 	GetType() string
-	HandleTask(task *Task) error
+	HandleTask(task Task) error
 	ProcessMessage(msg *Msg) error
 	SetParent(parent Obj)
+}
+
+var svrbus Obj
+
+func SetBus(bus Obj) {
+	svrbus = bus
+}
+
+func HandleTask(task Task) error {
+	if svrbus != nil {
+		return svrbus.HandleTask(task)
+	}
+	return errors.New("bus not ready")
 }
 
 //func (this *tmp) Init(msg *wssAPI.Msg) (err error) {

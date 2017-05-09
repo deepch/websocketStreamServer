@@ -22,6 +22,11 @@ type RTMPService struct {
 	parent   wssAPI.Obj
 }
 
+func init() {
+
+	logger.LOGE("rtmp init^^^^^^")
+}
+
 type RTMPConfig struct {
 	Port       int    `json:"Port"`
 	TimeoutSec int    `json:"TimeoutSec"`
@@ -73,7 +78,7 @@ func (this *RTMPService) GetType() string {
 	return wssAPI.OBJ_RTMPServer
 }
 
-func (this *RTMPService) HandleTask(task *wssAPI.Task) (err error) {
+func (this *RTMPService) HandleTask(task wssAPI.Task) (err error) {
 	return
 }
 

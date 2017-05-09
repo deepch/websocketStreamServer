@@ -3,10 +3,11 @@ package RTMPService
 import (
 	"container/list"
 	"errors"
+	"events/eStreamerEvent"
 	"fmt"
 	"logger"
 	"mediaTypes/flv"
-	"streamer"
+	"strings"
 	"sync"
 	"wssAPI"
 )
@@ -57,13 +58,18 @@ func (this *RTMPHandler) Start(msg *wssAPI.Msg) (err error) {
 
 func (this *RTMPHandler) Stop(msg *wssAPI.Msg) (err error) {
 	if this.srcAdded {
-		streamer.DelSource(this.streamName)
+		taskDelSrc := &eStreamerEvent.EveDelSource{}
+		taskDelSrc.StreamName = this.streamName
+		wssAPI.HandleTask(taskDelSrc)
 		logger.LOGT("del source:" + this.streamName)
 		this.srcAdded = false
 	}
 	if this.sinkAdded {
+		taskDelSink := &eStreamerEvent.EveDelSink{}
+		taskDelSink.StreamName = this.streamName
+		taskDelSink.SinkId = this.clientId
+		wssAPI.HandleTask(taskDelSink)
 		this.sinkAdded = false
-		streamer.DelSink(this.streamName, this.clientId)
 		logger.LOGT("del sinker:" + this.clientId)
 	}
 	this.player.Stop(msg)
@@ -75,7 +81,11 @@ func (this *RTMPHandler) GetType() string {
 	return rtmpTypeHandler
 }
 
-func (this *RTMPHandler) HandleTask(task *wssAPI.Task) (err error) {
+func (this *RTMPHandler) HandleTask(task wssAPI.Task) (err error) {
+	if task.Receiver() != this.GetType() {
+		logger.LOGW(fmt.Sprintf("invalid task receiver in rtmpHandler :%s", task.Receiver()))
+		return errors.New("invalid task")
+	}
 	return
 }
 
@@ -107,7 +117,9 @@ func (this *RTMPHandler) ProcessMessage(msg *wssAPI.Msg) (err error) {
 		if false == this.publisher.startPublish() {
 			logger.LOGE("start publish falied")
 			if true == this.srcAdded {
-				streamer.DelSource(this.streamName)
+				taskDelSrc := &eStreamerEvent.EveDelSource{}
+				taskDelSrc.StreamName = this.streamName
+				wssAPI.HandleTask(taskDelSrc)
 			}
 		}
 		return
@@ -213,8 +225,13 @@ func (this *RTMPHandler) handleInvoke(packet *RTMPPacket) (err error) {
 		cmdObj := amfobj.AMF0GetPropByIndex(2)
 		if cmdObj != nil {
 			this.app = cmdObj.Value.ObjValue.AMF0GetPropByName("app").Value.StrValue
+			if strings.HasSuffix(this.app, "/") {
+				this.app = strings.TrimSuffix(this.app, "/")
+			}
 		}
 		if this.app != serviceConfig.LivePath {
+			logger.LOGE(this.app)
+			logger.LOGE(serviceConfig.LivePath)
 			logger.LOGW("path wrong")
 		}
 		err = this.rtmpInstance.AcknowledgementBW()
@@ -272,9 +289,19 @@ func (this *RTMPHandler) handleInvoke(packet *RTMPPacket) (err error) {
 		}
 		//add to source
 		this.streamName = this.app + "/" + amfobj.AMF0GetPropByIndex(3).Value.StrValue
-		this.source, err = streamer.Addsource(this.streamName)
+		taskAddSrc := &eStreamerEvent.EveAddSource{}
+		taskAddSrc.StreamName = this.streamName
+		err = wssAPI.HandleTask(taskAddSrc)
 		if err != nil {
 			logger.LOGE("add source failed:" + err.Error())
+			err = this.rtmpInstance.CmdStatus("error", "NetStream.Publish.BadName",
+				fmt.Sprintf("publish %s.", this.streamName), "", 0, RTMP_channel_Invoke)
+			this.streamName = ""
+			return err
+		}
+		this.source = taskAddSrc.SrcObj
+		if this.source == nil {
+			logger.LOGE("add source failed:")
 			err = this.rtmpInstance.CmdStatus("error", "NetStream.Publish.BadName",
 				fmt.Sprintf("publish %s.", this.streamName), "", 0, RTMP_channel_Invoke)
 			this.streamName = ""
@@ -284,7 +311,10 @@ func (this *RTMPHandler) handleInvoke(packet *RTMPPacket) (err error) {
 		this.rtmpInstance.Link.Path = amfobj.AMF0GetPropByIndex(2).Value.StrValue
 		if false == this.publisher.startPublish() {
 			logger.LOGE("start publish failed:" + this.streamName)
-			streamer.DelSource(this.streamName)
+			//streamer.DelSource(this.streamName)
+			taskDelSrc := &eStreamerEvent.EveDelSource{}
+			taskDelSrc.StreamName = this.streamName
+			wssAPI.HandleTask(taskDelSrc)
 			return
 		}
 	case "FCUnpublish":
@@ -347,7 +377,11 @@ func (this *RTMPHandler) handleInvoke(packet *RTMPPacket) (err error) {
 		}
 
 		this.clientId = wssAPI.GenerateGUID()
-		err = streamer.AddSink(this.streamName, this.clientId, this)
+		taskAddSink := &eStreamerEvent.EveAddSink{}
+		taskAddSink.StreamName = this.streamName
+		taskAddSink.SinkId = this.clientId
+		taskAddSink.Sinker = this
+		err = wssAPI.HandleTask(taskAddSink)
 		if err != nil {
 			//404
 			err = this.rtmpInstance.CmdStatus("error", "NetStream.Play.StreamNotFound",

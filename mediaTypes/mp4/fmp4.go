@@ -1,10 +1,10 @@
 package mp4
 
 import (
-	"RTMPService"
 	"fmt"
 	"logger"
 	"mediaTypes/aac"
+	"mediaTypes/amf"
 	"mediaTypes/flv"
 	"mediaTypes/h264"
 	"mediaTypes/mp3"
@@ -172,7 +172,7 @@ func (this *FMP4Creater) createAudioInitSeg(tag *flv.FlvTag) (slice *FMP4Slice) 
 	slice = &FMP4Slice{}
 	slice.Type = flv.FLV_TAG_Audio
 	slice.Idx = -1
-	segEncoder := &RTMPService.AMF0Encoder{}
+	segEncoder := &amf.AMF0Encoder{}
 	segEncoder.Init()
 	//ftyp
 	ftyp := &MP4Box{}
@@ -389,7 +389,7 @@ func (this *FMP4Creater) createAudioSeg(tag *flv.FlvTag) (slice *FMP4Slice) {
 	slice.Type = flv.FLV_TAG_Audio
 	slice.Idx = this.audioIdx
 	this.audioIdx++
-	segEncoder := RTMPService.AMF0Encoder{}
+	segEncoder := amf.AMF0Encoder{}
 	segEncoder.Init()
 
 	sounBox := &MP4Box{}
@@ -503,7 +503,7 @@ func (this *FMP4Creater) createVideoInitSeg(tag *flv.FlvTag) (slice *FMP4Slice) 
 	slice = &FMP4Slice{}
 	slice.Type = flv.FLV_TAG_Video
 	slice.Idx = -1
-	segEncoder := RTMPService.AMF0Encoder{}
+	segEncoder := amf.AMF0Encoder{}
 	segEncoder.Init()
 	//ftyp
 	ftyp := &MP4Box{}
@@ -720,7 +720,7 @@ func (this *FMP4Creater) createVideoSeg(tag *flv.FlvTag) (slice *FMP4Slice) {
 	slice.Type = flv.FLV_TAG_Video
 	slice.Idx = this.videoIdx
 	this.videoIdx++
-	segEncoder := RTMPService.AMF0Encoder{}
+	segEncoder := amf.AMF0Encoder{}
 	segEncoder.Init()
 
 	flags := &FMP4Flags{}

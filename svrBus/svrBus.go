@@ -28,6 +28,19 @@ type SvrBus struct {
 	services      map[string]wssAPI.Obj
 }
 
+var service *SvrBus
+
+func init() {
+	logger.LOGT("bus init^^^^^^")
+	service = &SvrBus{}
+	wssAPI.SetBus(service)
+}
+
+func Start() {
+	service.Init(nil)
+	service.Start(nil)
+}
+
 func (this *SvrBus) Init(msg *wssAPI.Msg) (err error) {
 	this.services = make(map[string]wssAPI.Obj)
 	err = this.loadConfig()
@@ -174,10 +187,10 @@ func (this *SvrBus) GetType() string {
 	return wssAPI.OBJ_ServerBus
 }
 
-func (this *SvrBus) HandleTask(task *wssAPI.Task) (err error) {
+func (this *SvrBus) HandleTask(task wssAPI.Task) (err error) {
 	this.mutexServices.RLock()
 	defer this.mutexServices.RUnlock()
-	handler, exist := this.services[task.Reciver]
+	handler, exist := this.services[task.Receiver()]
 	if exist == false {
 		return errors.New("invalid task")
 	}
@@ -190,4 +203,8 @@ func (this *SvrBus) ProcessMessage(msg *wssAPI.Msg) (err error) {
 
 func (this *SvrBus) SetParent(arent wssAPI.Obj) {
 
+}
+
+func AddSvr(svr wssAPI.Obj) {
+	logger.LOGE("add svr")
 }

@@ -7,7 +7,7 @@ import (
 	"wssAPI"
 )
 
-func SetblackList(enable bool) (err error) {
+func enableBlackList(enable bool) (err error) {
 
 	service.mutexBlackList.Lock()
 	defer service.mutexBlackList.Unlock()
@@ -57,7 +57,7 @@ func DelBlackList(blackList *list.List) (err error) {
 	return
 }
 
-func SetwhiteList(enable bool) (err error) {
+func enableWhiteList(enable bool) (err error) {
 
 	service.mutexWhiteList.Lock()
 	defer service.mutexWhiteList.Unlock()
