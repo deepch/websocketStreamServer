@@ -16,10 +16,6 @@ const (
 	MSG_PLAY_STOP     = "NetStream.Play.Stop"
 )
 
-const (
-	TASK_PullRTMPLive = "PullRTMPPlive" //param UpStreamAddr,result streamSrc
-)
-
 type UpStreamAddr struct {
 	Protocol string
 	App      string
