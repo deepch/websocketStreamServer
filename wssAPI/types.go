@@ -15,19 +15,3 @@ const (
 	MSG_PLAY_START    = "NetStream.Play.Start"
 	MSG_PLAY_STOP     = "NetStream.Play.Stop"
 )
-
-type UpStreamAddr struct {
-	Protocol string
-	App      string
-	Address  string
-	Port     int
-}
-
-func (this *UpStreamAddr) Copy() (out *UpStreamAddr) {
-	out = &UpStreamAddr{}
-	out.Address = this.Address
-	out.App = this.App
-	out.Protocol = this.Protocol
-	out.Port = this.Port
-	return
-}

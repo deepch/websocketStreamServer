@@ -16,7 +16,7 @@ type EvePullRTMPStream struct {
 	Src      chan wssAPI.Obj
 }
 
-func (this *EvePullStream) Receiver() string {
+func (this *EvePullRTMPStream) Receiver() string {
 	return wssAPI.OBJ_RTMPServer
 }
 

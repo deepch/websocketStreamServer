@@ -17,7 +17,7 @@ const (
 )
 
 func init() {
-	logger.LOGE("streamer init^^^^^^")
+	logger.LOGT("streamer init^^^^^^")
 }
 
 type StreamerService struct {
@@ -31,7 +31,7 @@ type StreamerService struct {
 	blackOn        bool
 	whiteOn        bool
 	mutexUpStream  sync.RWMutex
-	upApps         map[string]*wssAPI.UpStreamAddr
+	upApps         map[string]*eLiveListCtrl.EveSetUpStreamApp
 }
 
 var service *StreamerService
@@ -40,7 +40,7 @@ func (this *StreamerService) Init(msg *wssAPI.Msg) (err error) {
 	this.sources = make(map[string]*streamSource)
 	this.blacks = make(map[string]string)
 	this.whites = make(map[string]string)
-	this.upApps = make(map[string]*wssAPI.UpStreamAddr)
+	this.upApps = make(map[string]*eLiveListCtrl.EveSetUpStreamApp)
 	service = this
 	this.blackOn = false
 	this.whiteOn = false
@@ -71,7 +71,7 @@ func (this *StreamerService) HandleTask(task wssAPI.Task) (err error) {
 		if false == ok {
 			return errors.New("invalid param")
 		}
-		taskAddsrc.SrcObj, err = Addsource(taskAddsrc.StreamName)
+		taskAddsrc.SrcObj, err = this.addsource(taskAddsrc.StreamName)
 		return
 	case eStreamerEvent.DelSource:
 		taskDelSrc, ok := task.(*eStreamerEvent.EveDelSource)
@@ -79,21 +79,21 @@ func (this *StreamerService) HandleTask(task wssAPI.Task) (err error) {
 			return errors.New("invalid param")
 		}
 		taskDelSrc.StreamName = taskDelSrc.StreamName
-		err = DelSource(taskDelSrc.StreamName)
+		err = this.delSource(taskDelSrc.StreamName)
 		return
 	case eStreamerEvent.AddSink:
 		taskAddSink, ok := task.(*eStreamerEvent.EveAddSink)
 		if false == ok {
 			return errors.New("invalid param")
 		}
-		err = AddSink(taskAddSink.StreamName, taskAddSink.SinkId, taskAddSink.Sinker)
+		err = this.addSink(taskAddSink.StreamName, taskAddSink.SinkId, taskAddSink.Sinker)
 		return
 	case eStreamerEvent.DelSink:
 		taskDelSink, ok := task.(*eStreamerEvent.EveDelSink)
 		if false == ok {
 			return errors.New("invalid param")
 		}
-		err = DelSink(taskDelSink.StreamName, taskDelSink.SinkId)
+		err = this.delSink(taskDelSink.StreamName, taskDelSink.SinkId)
 		return
 	case eLiveListCtrl.EnableBlackList:
 		taskEnableBlack, ok := task.(*eLiveListCtrl.EveEnableBlackList)
@@ -114,9 +114,9 @@ func (this *StreamerService) HandleTask(task wssAPI.Task) (err error) {
 			return errors.New("invalid param")
 		}
 		if taskSetBlackList.Add == true {
-			err = AddBlackList(taskSetBlackList.Names)
+			err = addBlackList(taskSetBlackList.Names)
 		} else {
-			err = DelBlackList(taskSetBlackList.Names)
+			err = delBlackList(taskSetBlackList.Names)
 		}
 		return
 	case eLiveListCtrl.SetWhiteList:
@@ -125,9 +125,9 @@ func (this *StreamerService) HandleTask(task wssAPI.Task) (err error) {
 			return errors.New("invalid param")
 		}
 		if taskSetWhite.Add {
-			err = AddWhiteList(taskSetWhite.Names)
+			err = addWhiteList(taskSetWhite.Names)
 		} else {
-			err = DelWhiteList(taskSetWhite.Names)
+			err = delWhiteList(taskSetWhite.Names)
 		}
 		return
 	case eLiveListCtrl.GetLiveList:
@@ -135,14 +135,25 @@ func (this *StreamerService) HandleTask(task wssAPI.Task) (err error) {
 		if false == ok {
 			return errors.New("invalid param")
 		}
-		taskGetLiveList.Lives, err = GetLiveList()
+		taskGetLiveList.Lives, err = getLiveList()
 		return
 	case eLiveListCtrl.GetLivePlayerCount:
 		taskGetLivePlayerCount, ok := task.(*eLiveListCtrl.EveGetLivePlayerCount)
 		if false == ok {
 			return errors.New("invalid param")
 		}
-		taskGetLivePlayerCount.Count, err = GetPlayerCount(taskGetLivePlayerCount.LiveName)
+		taskGetLivePlayerCount.Count, err = getPlayerCount(taskGetLivePlayerCount.LiveName)
+		return
+	case eLiveListCtrl.SetUpStreamApp:
+		taskSetUpStream, ok := task.(*eLiveListCtrl.EveSetUpStreamApp)
+		if false == ok {
+			return errors.New("invalid param set upstream")
+		}
+		if taskSetUpStream.Add {
+			err = this.addUpstream(taskSetUpStream)
+		} else {
+			err = this.delUpstream(taskSetUpStream)
+		}
 		return
 	default:
 		return errors.New("invalid task type:" + task.Type())
@@ -185,26 +196,22 @@ func (this *StreamerService) checkUpStreamCreated(path string) {
 //src control sink
 //add source:not start src,start sinks
 //del source:not stop src,stop sinks
-func Addsource(path string) (src wssAPI.Obj, err error) {
-	if service == nil {
-		logger.LOGE("streamer service null")
-		err = errors.New("streamer invalid")
-		return
-	}
-	if false == CheckBlack(path) || false == CheckWhite(path) {
+func (this *StreamerService) addsource(path string) (src wssAPI.Obj, err error) {
+
+	if false == this.checkStreamAddAble(path) {
 		return nil, errors.New("bad name")
 	}
-	service.mutexSources.Lock()
-	defer service.mutexSources.Unlock()
+	this.mutexSources.Lock()
+	defer this.mutexSources.Unlock()
 	logger.LOGT("add source:" + path)
-	oldSrc, exist := service.sources[path]
+	oldSrc, exist := this.sources[path]
 	if exist == false {
 		oldSrc = &streamSource{}
 		msg := &wssAPI.Msg{}
 		msg.Param1 = path
 		oldSrc.Init(msg)
 		oldSrc.SetProducer(true)
-		service.sources[path] = oldSrc
+		this.sources[path] = oldSrc
 		src = oldSrc
 		return
 	} else {
@@ -221,21 +228,18 @@ func Addsource(path string) (src wssAPI.Obj, err error) {
 	return
 }
 
-func DelSource(path string) (err error) {
-	if service == nil {
-		return errors.New("streamer invalid")
-	}
-	service.mutexSources.Lock()
-	defer service.mutexSources.Unlock()
+func (this *StreamerService) delSource(path string) (err error) {
+	this.mutexSources.Lock()
+	defer this.mutexSources.Unlock()
 	logger.LOGT("del source:" + path)
-	oldSrc, exist := service.sources[path]
+	oldSrc, exist := this.sources[path]
 	if exist == false {
 		return errors.New(path + " not found")
 	} else {
 		/*remove := */ oldSrc.SetProducer(false)
 		//if remove == true {
 		if 0 == len(oldSrc.sinks) {
-			delete(service.sources, path)
+			delete(this.sources, path)
 		}
 		//}
 		return
@@ -245,19 +249,16 @@ func DelSource(path string) (err error) {
 
 //add sink:auto start sink by src
 //del sink:not stop sink,stop by sink itself
-func AddSink(path, sinkId string, sinker wssAPI.Obj) (err error) {
-	if service == nil {
-		return errors.New("streamer invalid")
-	}
-	service.mutexSources.Lock()
-	defer service.mutexSources.Unlock()
-	src, exist := service.sources[path]
+func (this *StreamerService) addSink(path, sinkId string, sinker wssAPI.Obj) (err error) {
+	this.mutexSources.Lock()
+	defer this.mutexSources.Unlock()
+	src, exist := this.sources[path]
 	if false == exist {
 		app := strings.Split(path, "/")[0]
-		service.mutexSources.Unlock()
+		this.mutexSources.Unlock()
 		chRet := make(chan *streamSource)
-		service.createSrcFromUpstream(app, chRet)
-		service.mutexSources.Lock()
+		this.createSrcFromUpstream(app, chRet)
+		this.mutexSources.Lock()
 		src, ok := <-chRet
 		if false == ok {
 			return
@@ -274,13 +275,11 @@ func AddSink(path, sinkId string, sinker wssAPI.Obj) (err error) {
 	return
 }
 
-func DelSink(path, sinkId string) (err error) {
-	if service == nil {
-		return errors.New("streamer invalid")
-	}
-	service.mutexSources.Lock()
-	defer service.mutexSources.Unlock()
-	src, exist := service.sources[path]
+func (this *StreamerService) delSink(path, sinkId string) (err error) {
+
+	this.mutexSources.Lock()
+	defer this.mutexSources.Unlock()
+	src, exist := this.sources[path]
 	if false == exist {
 		return errors.New("source not found in del sink")
 	} else {
@@ -289,7 +288,7 @@ func DelSink(path, sinkId string) (err error) {
 		defer src.mutexSink.Unlock()
 		delete(src.sinks, sinkId)
 		if 0 == len(src.sinks) && src.bProducer == false {
-			delete(service.sources, path)
+			delete(this.sources, path)
 		}
 	}
 	return

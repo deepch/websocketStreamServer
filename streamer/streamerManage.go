@@ -3,7 +3,9 @@ package streamer
 import (
 	"container/list"
 	"errors"
+	"events/eLiveListCtrl"
 	"logger"
+	"strings"
 	"wssAPI"
 )
 
@@ -15,7 +17,7 @@ func enableBlackList(enable bool) (err error) {
 	return
 }
 
-func AddBlackList(blackList *list.List) (err error) {
+func addBlackList(blackList *list.List) (err error) {
 
 	service.mutexBlackList.Lock()
 	defer service.mutexBlackList.Unlock()
@@ -29,7 +31,7 @@ func AddBlackList(blackList *list.List) (err error) {
 		}
 		service.blacks[name] = name
 		if service.blackOn {
-			DelSource(name)
+			service.delSource(name)
 		}
 	}
 	if len(errs) > 0 {
@@ -38,7 +40,7 @@ func AddBlackList(blackList *list.List) (err error) {
 	return
 }
 
-func DelBlackList(blackList *list.List) (err error) {
+func delBlackList(blackList *list.List) (err error) {
 	service.mutexBlackList.Lock()
 	defer service.mutexBlackList.Unlock()
 	errs := ""
@@ -65,7 +67,7 @@ func enableWhiteList(enable bool) (err error) {
 	return
 }
 
-func AddWhiteList(whiteList *list.List) (err error) {
+func addWhiteList(whiteList *list.List) (err error) {
 
 	service.mutexWhiteList.Lock()
 	defer service.mutexWhiteList.Unlock()
@@ -85,7 +87,7 @@ func AddWhiteList(whiteList *list.List) (err error) {
 	return
 }
 
-func DelWhiteList(whiteList *list.List) (err error) {
+func delWhiteList(whiteList *list.List) (err error) {
 
 	service.mutexWhiteList.Lock()
 	defer service.mutexWhiteList.Unlock()
@@ -99,7 +101,7 @@ func DelWhiteList(whiteList *list.List) (err error) {
 		}
 		delete(service.whites, name)
 		if service.whiteOn {
-			DelSource(name)
+			service.delSource(name)
 		}
 	}
 	if len(errs) > 0 {
@@ -108,14 +110,14 @@ func DelWhiteList(whiteList *list.List) (err error) {
 	return
 }
 
-func GetLiveCount() (count int, err error) {
+func getLiveCount() (count int, err error) {
 	service.mutexSources.RLock()
 	defer service.mutexSources.RUnlock()
 	count = len(service.sources)
 	return
 }
 
-func GetLiveList() (liveList *list.List, err error) {
+func getLiveList() (liveList *list.List, err error) {
 	service.mutexSources.RLock()
 	defer service.mutexSources.RUnlock()
 	liveList = list.New()
@@ -125,7 +127,7 @@ func GetLiveList() (liveList *list.List, err error) {
 	return
 }
 
-func GetPlayerCount(name string) (count int, err error) {
+func getPlayerCount(name string) (count int, err error) {
 
 	service.mutexSources.RLock()
 	defer service.mutexSources.RUnlock()
@@ -139,55 +141,55 @@ func GetPlayerCount(name string) (count int, err error) {
 	return
 }
 
-func CheckBlack(path string) bool {
-	service.mutexBlackList.RLock()
-	defer service.mutexBlackList.RUnlock()
-	if false == service.blackOn {
-		return true
+func (this *StreamerService) checkStreamAddAble(appStreamname string) bool {
+	tmp := strings.Split(appStreamname, "/")
+	var name string
+	if len(tmp) > 1 {
+		name = tmp[1]
+	} else {
+		name = appStreamname
 	}
-	for k, _ := range service.blacks {
-		if k == path {
-			return false
+	this.mutexBlackList.RLock()
+	defer this.mutexBlackList.RUnlock()
+	if this.blackOn {
+		for k, _ := range this.blacks {
+			if name == k {
+				return false
+			}
 		}
+	}
+	this.mutexWhiteList.RLock()
+	defer this.mutexWhiteList.RUnlock()
+	if this.whiteOn {
+		for k, _ := range this.whites {
+			if name == k {
+				return true
+			}
+		}
+		return false
 	}
 	return true
 }
 
-func CheckWhite(path string) bool {
-	service.mutexWhiteList.RLock()
-	defer service.mutexWhiteList.RUnlock()
-	if false == service.whiteOn {
-		return true
-	}
-	for k, _ := range service.whites {
-		if k == path {
-			return true
-		}
-	}
-	return false
-}
-
-func AddUpStreamApp(addr *wssAPI.UpStreamAddr) (err error) {
-
-	service.mutexUpStream.Lock()
-	defer service.mutexUpStream.Unlock()
-	_, exist := service.upApps[addr.App]
+func (this *StreamerService) addUpstream(app *eLiveListCtrl.EveSetUpStreamApp) (err error) {
+	this.mutexUpStream.Lock()
+	defer this.mutexUpStream.Unlock()
+	_, exist := this.upApps[app.App]
 	if true == exist {
-		return errors.New("app " + addr.App + " existed")
+		return errors.New("add up app:" + app.App + " existed")
 	}
-	service.upApps[addr.App] = addr.Copy()
+	this.upApps[app.App] = app.Copy()
 	return
 }
 
-func DelUpStreamApp(app string) (err error) {
-
-	service.mutexUpStream.Lock()
-	defer service.mutexUpStream.Unlock()
-	_, exist := service.upApps[app]
-	if exist == false {
-		return errors.New(app + " not found")
+func (this *StreamerService) delUpstream(app *eLiveListCtrl.EveSetUpStreamApp) (err error) {
+	this.mutexUpStream.Lock()
+	defer this.mutexUpStream.Unlock()
+	_, exist := this.upApps[app.App]
+	if false == exist {
+		return errors.New("del up app: " + app.App + " not existed")
 	}
-	delete(service.upApps, app)
+	delete(this.upApps, app.App)
 	return
 }
 

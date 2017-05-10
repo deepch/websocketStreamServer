@@ -12,6 +12,7 @@ const (
 	SetWhiteList       = "SetWhiteList"
 	GetLiveList        = "GetLiveList"
 	GetLivePlayerCount = "GetLivePlayerCount"
+	SetUpStreamApp     = "SetUpStreamApp"
 )
 
 //black list
