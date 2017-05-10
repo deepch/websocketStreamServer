@@ -67,3 +67,7 @@ func HandleTask(task Task) error {
 //func (this *tmp) ProcessMessage(msg *wssAPI.Msg) (err error) {
 //	return
 //}
+
+//func (this *tmp) SetParent(parent) {
+//	this.parent = parent
+//}

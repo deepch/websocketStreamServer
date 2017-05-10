@@ -3,15 +3,19 @@ package RTMPService
 import (
 	"encoding/json"
 	"errors"
+	"events/eRTMPEvent"
+	"fmt"
 	"logger"
 	"net"
 	"strconv"
+	"strings"
 	"time"
 	"wssAPI"
 )
 
 const (
 	rtmpTypeHandler  = "rtmpHandler"
+	rtmpTypePuller   = "rtmpPuller"
 	livePathDefault  = "live"
 	timeoutDefault   = 3000
 	rtmpCacheDefault = 1000
@@ -79,6 +83,28 @@ func (this *RTMPService) GetType() string {
 }
 
 func (this *RTMPService) HandleTask(task wssAPI.Task) (err error) {
+	if task.Receiver() != this.GetType() {
+		return errors.New("not my task")
+	}
+	switch task.Type() {
+	case eRTMPEvent.PullRTMPStream:
+		taskPull, ok := task.(*eRTMPEvent.EvePullRTMPStream)
+		if false == ok {
+			return errors.New("invalid param to pull rtmp stream")
+		}
+		taskPull.Protocol = strings.ToLower(taskPull.Protocol)
+		switch taskPull.Protocol {
+		case "rtmp":
+			PullRTMPLive(taskPull)
+		default:
+			logger.LOGE(fmt.Sprintf("fmt %s not support now", taskPull.Protocol))
+			close(taskPull.Src)
+			return errors.New("fmt not support")
+		}
+		return
+	default:
+		return errors.New(fmt.Sprintf("task %s not prossed", task.Type()))
+	}
 	return
 }
 

@@ -46,6 +46,9 @@ func (this *streamSource) HandleTask(task wssAPI.Task) (err error) {
 func (this *streamSource) ProcessMessage(msg *wssAPI.Msg) (err error) {
 	switch msg.Type {
 	case wssAPI.MSG_FLV_TAG:
+		if false == this.bProducer {
+			return errors.New("src may closed or invalid")
+		}
 		tag := msg.Param1.(*flv.FlvTag)
 		switch tag.TagType {
 		case flv.FLV_TAG_Audio:

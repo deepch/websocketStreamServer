@@ -3,11 +3,13 @@ package streamer
 import (
 	"errors"
 	"events/eLiveListCtrl"
+	"events/eRTMPEvent"
 	"events/eStreamerEvent"
 	"fmt"
 	"logger"
 	"strings"
 	"sync"
+	"time"
 	"wssAPI"
 )
 
@@ -44,6 +46,7 @@ func (this *StreamerService) Init(msg *wssAPI.Msg) (err error) {
 	service = this
 	this.blackOn = false
 	this.whiteOn = false
+	this.badIni()
 	return
 }
 
@@ -165,7 +168,7 @@ func (this *StreamerService) ProcessMessage(msg *wssAPI.Msg) (err error) {
 	return
 }
 
-func (this *StreamerService) createSrcFromUpstream(app string, chRet chan *streamSource) {
+func (this *StreamerService) createSrcFromUpstream(app, streamName string, chRet chan wssAPI.Obj) {
 	this.mutexUpStream.RLock()
 	addr, exist := this.upApps[app]
 	if exist == false {
@@ -174,14 +177,21 @@ func (this *StreamerService) createSrcFromUpstream(app string, chRet chan *strea
 		return
 	}
 	this.mutexUpStream.RUnlock()
-	switch addr.Protocol {
-	case "RTMP":
-		//		task := &wssAPI.Task{}
-		//		task.Type = wssAPI.TASK_PullRTMPLive
-		//		task.Reciver = wssAPI.OBJ_RTMPServer
-		//		task.Param1 = addr.Copy()
-		//		task.Param2 = chRet
-		//		this.parent.HandleTask(task)
+	protocol := strings.ToLower(addr.Protocol)
+	switch protocol {
+	case "rtmp":
+		task := &eRTMPEvent.EvePullRTMPStream{}
+		task.App = addr.App
+		task.Address = addr.Addr
+		task.Port = addr.Port
+		task.Protocol = addr.Protocol
+		task.StreamName = streamName
+		task.Src = chRet
+		err := wssAPI.HandleTask(task)
+		if err != nil {
+			logger.LOGE(err.Error())
+		}
+		return
 	default:
 		logger.LOGE(fmt.Sprintf("%s not support now...", addr.Protocol))
 		return
@@ -254,21 +264,42 @@ func (this *StreamerService) addSink(path, sinkId string, sinker wssAPI.Obj) (er
 	defer this.mutexSources.Unlock()
 	src, exist := this.sources[path]
 	if false == exist {
-		app := strings.Split(path, "/")[0]
+		tmpStrings := strings.Split(path, "/")
+		if len(tmpStrings) < 2 {
+			return errors.New("add sink bad path:" + path)
+		}
+		app := tmpStrings[0]
+		streamName := tmpStrings[1]
+
+		chRet := make(chan wssAPI.Obj)
+
 		this.mutexSources.Unlock()
-		chRet := make(chan *streamSource)
-		this.createSrcFromUpstream(app, chRet)
-		this.mutexSources.Lock()
-		src, ok := <-chRet
-		if false == ok {
-			return
+
+		go this.createSrcFromUpstream(app, streamName, chRet)
+		select {
+		case srcObj, ok := <-chRet:
+			this.mutexSources.Lock()
+			logger.LOGT("re lock for defer")
+			if false == ok {
+				return errors.New("chan closed")
+			}
+			//close chan
+			close(chRet)
+			if nil == srcObj {
+				return errors.New("source not found in add sink")
+			}
+			src, ok = srcObj.(*streamSource)
+			if false == ok {
+				return errors.New("bad source")
+			}
+			return src.AddSink(sinkId, sinker)
+		case <-time.After(1 * time.Minute):
+			this.mutexSources.Lock()
+			logger.LOGT("re lock for defer")
+			logger.LOGE("add sink timeout")
+			return errors.New("add sink timeout")
 		}
-		//!add to map
-		if src == nil {
-			err = errors.New("source not found in add sink")
-		}
-		close(chRet)
-		return src.AddSink(sinkId, sinker)
+		return errors.New("add sink failed")
 	} else {
 		return src.AddSink(sinkId, sinker)
 	}

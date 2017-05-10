@@ -13,7 +13,7 @@ type EveSetUpStreamApp struct {
 }
 
 func (this *EveSetUpStreamApp) Receiver() string {
-	return wssAPI.OBJ_RTMPServer
+	return wssAPI.OBJ_StreamerServer
 }
 
 func (this *EveSetUpStreamApp) Type() string {

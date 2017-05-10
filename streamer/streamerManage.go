@@ -196,3 +196,9 @@ func (this *StreamerService) delUpstream(app *eLiveListCtrl.EveSetUpStreamApp) (
 func (this *StreamerService) SetParent(parent wssAPI.Obj) {
 	this.parent = parent
 }
+
+func (this *StreamerService) badIni() {
+	logger.LOGW("some bad init here!!!")
+	taskAddUp := eLiveListCtrl.NewSetUpStreamApp(true, "live", "rtmp", "127.0.0.1", 1935)
+	this.HandleTask(taskAddUp)
+}

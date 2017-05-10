@@ -167,36 +167,30 @@ func (this *RTMPHandler) HandleRTMPPacket(packet *RTMPPacket) (err error) {
 	case RTMP_PACKET_TYPE_INVOKE:
 		err = this.handleInvoke(packet)
 	case RTMP_PACKET_TYPE_AUDIO:
-		if this.publisher.isPublishing() && this.source != nil {
-			msg := &wssAPI.Msg{}
-			msg.Type = wssAPI.MSG_FLV_TAG
-			msg.Param1 = packet.ToFLVTag()
-			this.source.ProcessMessage(msg)
-		} else {
-			logger.LOGE("bad status")
-			logger.LOGE(this.source)
-		}
+		return this.sendFlvToSrc(packet)
 	case RTMP_PACKET_TYPE_VIDEO:
-		if this.publisher.isPublishing() && this.source != nil {
-			msg := &wssAPI.Msg{}
-			msg.Type = wssAPI.MSG_FLV_TAG
-			msg.Param1 = packet.ToFLVTag()
-			this.source.ProcessMessage(msg)
-		} else {
-			logger.LOGE("bad status")
-		}
+		return this.sendFlvToSrc(packet)
 	case RTMP_PACKET_TYPE_INFO:
-		if this.publisher.isPublishing() && this.source != nil {
-			msg := &wssAPI.Msg{}
-			msg.Type = wssAPI.MSG_FLV_TAG
-			//logger.LOGI(packet.ChunkStreamID)
-			msg.Param1 = packet.ToFLVTag()
-			this.source.ProcessMessage(msg)
-		} else {
-			logger.LOGE("bad status")
-		}
+		return this.sendFlvToSrc(packet)
 	default:
 		logger.LOGW(fmt.Sprintf("rtmp packet type %d not processed", packet.MessageTypeId))
+	}
+	return
+}
+
+func (this *RTMPHandler) sendFlvToSrc(pkt *RTMPPacket) (err error) {
+	if this.publisher.isPublishing() && this.source != nil {
+		msg := &wssAPI.Msg{}
+		msg.Type = wssAPI.MSG_FLV_TAG
+		msg.Param1 = pkt.ToFLVTag()
+		err = this.source.ProcessMessage(msg)
+		if err != nil {
+			logger.LOGE(err.Error())
+			this.Stop(nil)
+		}
+		return
+	} else {
+		logger.LOGE("bad status")
 	}
 	return
 }
