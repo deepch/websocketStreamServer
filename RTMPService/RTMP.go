@@ -7,6 +7,7 @@ import (
 	"math/rand"
 	"mediaTypes/flv"
 	"net"
+	"sync"
 	"wssAPI"
 )
 
@@ -66,6 +67,8 @@ type RTMP_LINK struct {
 	VideoCodecs string
 	Path        string
 	Address     string
+	SeekTime    int
+	StopTime    int
 }
 
 type RTMPPacket struct {
@@ -96,6 +99,7 @@ type RTMP struct {
 	buffMS        uint32
 	recvCache     map[int32]*RTMPPacket
 	methodCache   map[int32]string
+	mutexMethod   sync.RWMutex
 }
 
 func (this *RTMPPacket) Copy() (dst *RTMPPacket) {
@@ -389,7 +393,9 @@ func (this *RTMP) SendPacket(packet *RTMPPacket, queue bool) (err error) {
 		if err != nil {
 			return err
 		}
+		this.mutexMethod.Lock()
 		this.methodCache[int32(transactionId)] = cmdName
+		this.mutexMethod.Unlock()
 	}
 	return
 }
@@ -755,4 +761,184 @@ func (this *RTMP) OnMetadata(data []byte) {
 
 	pkt.MessageLength = uint32(len(pkt.Body))
 	this.SendPacket(pkt, false)
+}
+
+func (this *RTMP) Connect(publish bool) (err error) {
+	pkt := &RTMPPacket{}
+	pkt.ChunkStreamID = RTMP_channel_Invoke
+	pkt.Fmt = 0
+	pkt.MessageTypeId = RTMP_PACKET_TYPE_INVOKE
+	encoder := &AMF0Encoder{}
+	encoder.Init()
+	encoder.EncodeString("connect")
+	this.NumInvokes++
+	encoder.EncodeNumber(float64(this.NumInvokes))
+	encoder.AppendByte(AMF0_object)
+	encoder.EncodeNamedString("app", this.Link.App)
+	encoder.EncodeNamedString("flashver", "WIN 18,0,0,232")
+	encoder.EncodeNamedString("tcUrl", this.Link.TcUrl)
+
+	if false == publish {
+		encoder.EncodeNamedBool("fpad", false)
+		encoder.EncodeNamedNumber("capabilities", 239)
+		encoder.EncodeNamedNumber("audioCodecs", float64(this.AudioCodecs))
+		encoder.EncodeNamedNumber("videoCodecs", float64(this.VideoCodecs))
+		encoder.EncodeNamedNumber("videoFunction", 1.0)
+		encoder.EncodeNamedNumber("objectEncoding", 3.0)
+	}
+
+	encoder.EncodeInt24(AMF0_object_end)
+
+	pkt.Body, err = encoder.GetData()
+
+	if err != nil {
+		return
+	}
+	pkt.MessageLength = uint32(len(pkt.Body))
+	err = this.SendPacket(pkt, true)
+	return
+}
+
+func (this *RTMP) CreateStream() (err error) {
+	pkt := &RTMPPacket{}
+	pkt.ChunkStreamID = RTMP_channel_Invoke
+	pkt.Fmt = 0
+	pkt.MessageTypeId = RTMP_PACKET_TYPE_INVOKE
+	encoder := &AMF0Encoder{}
+	encoder.Init()
+	encoder.EncodeString("createStream")
+	this.NumInvokes++
+	encoder.EncodeNumber(float64(this.NumInvokes))
+	encoder.AppendByte(AMF0_null)
+	pkt.Body, err = encoder.GetData()
+
+	if err != nil {
+		return
+	}
+	pkt.MessageLength = uint32(len(pkt.Body))
+	err = this.SendPacket(pkt, true)
+
+	return
+}
+
+func (this *RTMP) SendCheckBW() (err error) {
+	pkt := &RTMPPacket{}
+	pkt.ChunkStreamID = RTMP_channel_Invoke
+	pkt.Fmt = 0
+	pkt.MessageTypeId = RTMP_PACKET_TYPE_INVOKE
+	encoder := &AMF0Encoder{}
+	encoder.Init()
+	encoder.EncodeString("_checkbw")
+	this.NumInvokes++
+	encoder.EncodeNumber(float64(this.NumInvokes))
+	encoder.AppendByte(AMF0_null)
+	pkt.Body, err = encoder.GetData()
+
+	if err != nil {
+		return
+	}
+	pkt.MessageLength = uint32(len(pkt.Body))
+	err = this.SendPacket(pkt, false)
+
+	return
+}
+
+func (this *RTMP) SendReleaseStream() (err error) {
+	pkt := &RTMPPacket{}
+	pkt.ChunkStreamID = RTMP_channel_Invoke
+	pkt.Fmt = 0
+	pkt.MessageTypeId = RTMP_PACKET_TYPE_INVOKE
+	encoder := &AMF0Encoder{}
+	encoder.Init()
+	encoder.EncodeString("releaseStream")
+	this.NumInvokes++
+	encoder.EncodeNumber(float64(this.NumInvokes))
+	encoder.AppendByte(AMF0_null)
+	encoder.EncodeString(this.Link.Path)
+	pkt.Body, err = encoder.GetData()
+
+	if err != nil {
+		return
+	}
+	pkt.MessageLength = uint32(len(pkt.Body))
+	err = this.SendPacket(pkt, true)
+
+	return
+}
+
+func (this *RTMP) SendFCPublish() (err error) {
+	pkt := &RTMPPacket{}
+	pkt.ChunkStreamID = RTMP_channel_Invoke
+	pkt.Fmt = 0
+	pkt.MessageTypeId = RTMP_PACKET_TYPE_INVOKE
+	encoder := &AMF0Encoder{}
+	encoder.Init()
+	encoder.EncodeString("FCPublish")
+	this.NumInvokes++
+	encoder.EncodeNumber(float64(this.NumInvokes))
+	encoder.AppendByte(AMF0_null)
+	encoder.EncodeString(this.Link.Path)
+	pkt.Body, err = encoder.GetData()
+
+	if err != nil {
+		return
+	}
+	pkt.MessageLength = uint32(len(pkt.Body))
+	err = this.SendPacket(pkt, true)
+
+	return
+}
+
+func (this *RTMP) SendPlay() (err error) {
+	pkt := &RTMPPacket{}
+	pkt.ChunkStreamID = RTMP_channel_AV
+	pkt.Fmt = 0
+	pkt.MessageTypeId = RTMP_PACKET_TYPE_INVOKE
+	pkt.MessageStreamId = this.StreamId
+	encoder := &AMF0Encoder{}
+	encoder.Init()
+	encoder.EncodeString("play")
+	this.NumInvokes++
+	encoder.EncodeNumber(float64(this.NumInvokes))
+	encoder.AppendByte(AMF0_null)
+	encoder.EncodeString(this.Link.Path)
+	if this.Link.SeekTime > 0 {
+		encoder.EncodeNumber(float64(this.Link.SeekTime))
+	} else {
+		encoder.EncodeNumber(-2.0)
+	}
+	if this.Link.StopTime != 0 {
+		encoder.EncodeNumber(float64(this.Link.StopTime - this.Link.SeekTime))
+	}
+	pkt.Body, err = encoder.GetData()
+
+	if err != nil {
+		return
+	}
+	pkt.MessageLength = uint32(len(pkt.Body))
+	err = this.SendPacket(pkt, true)
+
+	return
+}
+
+func (this *RTMP) SendCheckBWResult(transactionId float64) (err error) {
+	pkt := &RTMPPacket{}
+	pkt.ChunkStreamID = RTMP_channel_Invoke
+	pkt.Fmt = 0
+	pkt.MessageTypeId = RTMP_PACKET_TYPE_INVOKE
+	encoder := &AMF0Encoder{}
+	encoder.Init()
+	encoder.EncodeString("_result")
+	encoder.EncodeNumber(transactionId)
+	encoder.AppendByte(AMF0_null)
+	encoder.EncodeNumber(0.0)
+	pkt.Body, err = encoder.GetData()
+
+	if err != nil {
+		return
+	}
+	pkt.MessageLength = uint32(len(pkt.Body))
+	err = this.SendPacket(pkt, false)
+
+	return
 }

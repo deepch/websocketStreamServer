@@ -4,6 +4,7 @@ import (
 	"errors"
 	"events/eRTMPEvent"
 	"events/eStreamerEvent"
+	"fmt"
 	"logger"
 	"math/rand"
 	"net"
@@ -20,6 +21,7 @@ type RTMPPuller struct {
 	pullParams *eRTMPEvent.EvePullRTMPStream
 	waitRead   *sync.WaitGroup
 	reading    bool
+	srcId      int64
 }
 
 func PullRTMPLive(task *eRTMPEvent.EvePullRTMPStream) {
@@ -44,7 +46,7 @@ func (this *RTMPPuller) initRTMPLink() {
 	this.rtmp.Link.TcUrl = this.pullParams.Protocol + "://" +
 		this.pullParams.Address + ":" +
 		strconv.Itoa(this.pullParams.Port) + "/" +
-		this.pullParams.App + "/" + this.pullParams.StreamName
+		this.pullParams.App
 	logger.LOGT(this.rtmp.Link.TcUrl)
 }
 
@@ -61,11 +63,12 @@ func (this *RTMPPuller) Start(msg *wssAPI.Msg) (err error) {
 	//start pull
 	//connect
 	addr := this.pullParams.Address + ":" + strconv.Itoa(this.pullParams.Port)
-	this.rtmp.Conn, err = net.Dial("tcp", addr)
+	conn, err := net.Dial("tcp", addr)
 	if err != nil {
 		logger.LOGE("connect failed:" + err.Error())
 		return
 	}
+	this.rtmp.Init(conn)
 	//just simple handshake
 	err = this.handleShake()
 	if err != nil {
@@ -75,6 +78,11 @@ func (this *RTMPPuller) Start(msg *wssAPI.Msg) (err error) {
 	//start read thread
 	go this.threadRead()
 	//play
+	err = this.play()
+	if err != nil {
+		logger.LOGE("play failed")
+		return
+	}
 	return
 }
 
@@ -91,10 +99,12 @@ func (this *RTMPPuller) Stop(msg *wssAPI.Msg) (err error) {
 	if nil != this.src {
 		taskDelSrc := &eStreamerEvent.EveDelSource{}
 		taskDelSrc.StreamName = this.pullParams.App + "/" + this.pullParams.StreamName
+		taskDelSrc.Id = this.srcId
 		err = wssAPI.HandleTask(taskDelSrc)
 		if err != nil {
 			logger.LOGE(err.Error())
 		}
+		this.src = nil
 	}
 
 	return
@@ -106,7 +116,7 @@ func (this *RTMPPuller) handleShake() (err error) {
 	conn := this.rtmp.Conn
 	c0 := make([]byte, 1)
 	c0[0] = 3
-	_, err = wssAPI.TcpWrite(conn, c0)
+	_, err = wssAPI.TcpWriteTimeOut(conn, c0, serviceConfig.TimeoutSec)
 	if err != nil {
 		logger.LOGE("send c0 failed")
 		return
@@ -116,32 +126,32 @@ func (this *RTMPPuller) handleShake() (err error) {
 	for idx := 8; idx < len(c1); idx++ {
 		c1[idx] = byte(rand.Intn(255))
 	}
-	_, err = wssAPI.TcpWrite(conn, c1)
+	_, err = wssAPI.TcpWriteTimeOut(conn, c1, serviceConfig.TimeoutSec)
 	if err != nil {
 		logger.LOGE("send c1 failed")
 		return
 	}
 	//read s0
-	s0, err := wssAPI.TcpRead(conn, 1)
+	s0, err := wssAPI.TcpReadTimeout(conn, 1, serviceConfig.TimeoutSec)
 	if err != nil {
 		logger.LOGE("read s0 failed")
 		return
 	}
 	logger.LOGT(s0)
 	//read s1
-	s1, err := wssAPI.TcpRead(conn, randomSize+8)
+	s1, err := wssAPI.TcpReadTimeout(conn, randomSize+8, serviceConfig.TimeoutSec)
 	if err != nil {
 		logger.LOGE("read s1 failed")
 		return
 	}
 	//send c2
-	_, err = wssAPI.TcpWrite(conn, s1)
+	_, err = wssAPI.TcpWriteTimeOut(conn, s1, serviceConfig.TimeoutSec)
 	if err != nil {
 		logger.LOGE("send c2 failed")
 		return
 	}
 	//read s2
-	s2, err := wssAPI.TcpRead(conn, randomSize+8)
+	s2, err := wssAPI.TcpReadTimeout(conn, randomSize+8, serviceConfig.TimeoutSec)
 	if err != nil {
 		logger.LOGE("read s2 failed")
 		return
@@ -177,12 +187,46 @@ func (this *RTMPPuller) threadRead() {
 	this.waitRead.Add(1)
 	defer func() {
 		this.waitRead.Done()
-		this.rtmp.Conn.Close()
-		this.rtmp.Conn = nil
+		this.Stop(nil)
 		logger.LOGT("stop read,close conn")
 	}()
 	for this.reading {
-		this.rtmp.ReadPacket()
+		packet, err := this.readRTMPPkt()
+		if err != nil {
+			logger.LOGE(err.Error())
+			this.reading = false
+			return
+		}
+		switch packet.MessageTypeId {
+		case RTMP_PACKET_TYPE_CHUNK_SIZE:
+			this.rtmp.RecvChunkSize, err = AMF0DecodeInt32(packet.Body)
+			logger.LOGT(fmt.Sprintf("chunk size:%d", this.rtmp.RecvChunkSize))
+		case RTMP_PACKET_TYPE_CONTROL:
+			err = this.rtmp.HandleControl(packet)
+		case RTMP_PACKET_TYPE_BYTES_READ_REPORT:
+		case RTMP_PACKET_TYPE_SERVER_BW:
+			this.rtmp.TargetBW, err = AMF0DecodeInt32(packet.Body)
+		case RTMP_PACKET_TYPE_CLIENT_BW:
+			this.rtmp.SelfBW, err = AMF0DecodeInt32(packet.Body)
+			this.rtmp.LimitType = uint32(packet.Body[4])
+		case RTMP_PACKET_TYPE_FLEX_MESSAGE:
+			err = this.handleInvoke(packet)
+		case RTMP_PACKET_TYPE_INVOKE:
+			err = this.handleInvoke(packet)
+		case RTMP_PACKET_TYPE_AUDIO:
+			logger.LOGT("audio")
+		case RTMP_PACKET_TYPE_VIDEO:
+			logger.LOGT("video")
+		case RTMP_PACKET_TYPE_INFO:
+			logger.LOGT("media info")
+		case RTMP_PACKET_TYPE_FLASH_VIDEO:
+			logger.LOGT("aggregation")
+		default:
+			logger.LOGW(fmt.Sprintf("rtmp packet type %d not processed", packet.MessageTypeId))
+		}
+		if err != nil {
+			this.reading = false
+		}
 	}
 }
 
@@ -195,4 +239,168 @@ func (this *RTMPPuller) readRTMPPkt() (packet *RTMPPacket, err error) {
 	defer this.rtmp.Conn.SetReadDeadline(time.Time{})
 	packet, err = this.rtmp.ReadPacket()
 	return
+}
+
+func (this *RTMPPuller) play() (err error) {
+	//connect
+	err = this.rtmp.Connect(false)
+	if err != nil {
+		logger.LOGE("rtmp connect to play failed")
+		return
+	}
+	return
+}
+
+func (this *RTMPPuller) getProp(pkt *RTMPPacket) (amfobj *AMF0Object, err error) {
+	if RTMP_PACKET_TYPE_FLEX_MESSAGE == pkt.MessageTypeId {
+		amfobj, err = AMF0DecodeObj(pkt.Body[1:])
+	} else {
+		amfobj, err = AMF0DecodeObj(pkt.Body)
+	}
+	if err != nil {
+		logger.LOGE("recved invalid amf0 object")
+		return
+	}
+	if amfobj.Props.Len() == 0 {
+		logger.LOGT(pkt.Body)
+		logger.LOGT(string(pkt.Body))
+		return nil, errors.New("no props")
+	}
+	return
+}
+
+func (this *RTMPPuller) handleInvoke(pkt *RTMPPacket) (err error) {
+
+	amfobj, err := this.getProp(pkt)
+	if err != nil || amfobj == nil {
+		logger.LOGE("decode amf failed")
+		return
+	}
+	methodProp := amfobj.Props.Front().Value.(*AMF0Property)
+	switch methodProp.Value.StrValue {
+	case "_result":
+		err = this.handleRTMPResult(amfobj)
+	case "onBWDone":
+		this.rtmp.SendCheckBW()
+		this.rtmp.SendReleaseStream()
+		this.rtmp.SendFCPublish()
+	case "_onbwcheck":
+		err = this.rtmp.SendCheckBWResult(amfobj.AMF0GetPropByIndex(1).Value.NumValue)
+	case "onFCPublish":
+	case "_error":
+	case "_onbwdone":
+	case "onStatus":
+		code := ""
+		level := ""
+		desc := ""
+		if amfobj.Props.Len() >= 4 {
+			objStatus := amfobj.AMF0GetPropByIndex(3).Value.ObjValue
+			for e := objStatus.Props.Front(); e != nil; e = e.Next() {
+				prop := e.Value.(*AMF0Property)
+				switch prop.Name {
+				case "code":
+					code = prop.Value.StrValue
+				case "level":
+					level = prop.Value.StrValue
+				case "description":
+					desc = prop.Value.StrValue
+				}
+			}
+		}
+		logger.LOGT(level)
+		logger.LOGT(desc)
+		//close
+		if code == "NetStream.Failed" || code == "NetStream.Play.Failed" ||
+			code == "NetStream.Play.StreamNotFound" || code == "NetConnection.Connect.InvalidApp" ||
+			code == "NetStream.Publish.Rejected" || code == "NetStream.Publish.Denied" ||
+			code == "NetConnection.Connect.Rejected" {
+			return errors.New("error and close")
+		}
+		//stop play
+		if code == "NetStream.Play.Complete" || code == "NetStream.Play.Stop" ||
+			code == "NetStream.Play.UnpublishNotify" {
+			return errors.New("stop play")
+		}
+		//start play
+		if code == "NetStream.Play.Start" || code == "NetStream.Play.PublishNotify" {
+			this.CreatePlaySRC()
+		}
+	default:
+		logger.LOGW(fmt.Sprintf("method %s not processed", methodProp.Value.StrValue))
+	}
+
+	return
+}
+
+func (this *RTMPPuller) handleRTMPResult(amfobj *AMF0Object) (err error) {
+	idx := int32(amfobj.AMF0GetPropByIndex(1).Value.NumValue)
+	this.rtmp.mutexMethod.Lock()
+	methodRet, ok := this.rtmp.methodCache[idx]
+	if ok == true {
+		delete(this.rtmp.methodCache, idx)
+	}
+	this.rtmp.mutexMethod.Unlock()
+	if !ok {
+		logger.LOGW("method not found")
+		return
+	}
+	switch methodRet {
+	case "connect":
+		err = this.rtmp.AcknowledgementBW()
+		if err != nil {
+			logger.LOGE("acknowledgementBW failed")
+			return
+		}
+		err = this.rtmp.CreateStream()
+		if err != nil {
+			logger.LOGE("createStream failed")
+			return
+		}
+	case "createStream":
+		this.rtmp.StreamId = uint32(amfobj.AMF0GetPropByIndex(3).Value.NumValue)
+		err = this.rtmp.SendPlay()
+		if err != nil {
+			logger.LOGE("send play failed")
+			return
+		}
+	case "releaseStream":
+	case "FCPublish":
+	default:
+		logger.LOGE(fmt.Sprintf("%s result not processed", methodRet))
+	}
+	return
+}
+
+func (this *RTMPPuller) CreatePlaySRC() {
+	if this.src == nil {
+		taskGet := &eStreamerEvent.EveGetSource{}
+		taskGet.StreamName = this.rtmp.Link.App + "/" + this.rtmp.Link.Path
+		err := wssAPI.HandleTask(taskGet)
+		if err != nil {
+			logger.LOGE(err.Error())
+		}
+		if taskGet.SrcObj != nil {
+			logger.LOGT("some other pulled this stream:" + taskGet.StreamName)
+			this.pullParams.Src <- taskGet.SrcObj
+			this.srcId = 0
+			this.reading = false
+			return
+		}
+		taskAdd := &eStreamerEvent.EveAddSource{}
+		taskAdd.StreamName = this.rtmp.Link.App + "/" + this.rtmp.Link.Path
+		err = wssAPI.HandleTask(taskAdd)
+		if err != nil {
+			logger.LOGE(err.Error())
+			return
+		}
+		if taskAdd.SrcObj == nil {
+			close(this.pullParams.Src)
+			this.reading = false
+			return
+		}
+		this.src = taskAdd.SrcObj
+		this.srcId = taskAdd.Id
+		logger.LOGT("add src ok..")
+		return
+	}
 }

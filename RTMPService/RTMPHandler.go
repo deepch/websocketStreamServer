@@ -26,6 +26,7 @@ type RTMPHandler struct {
 	app          string
 	player       rtmpPlayer
 	publisher    rtmpPublisher
+	srcId        int64
 }
 type RTMPPlayInfo struct {
 	playReset      bool
@@ -60,6 +61,7 @@ func (this *RTMPHandler) Stop(msg *wssAPI.Msg) (err error) {
 	if this.srcAdded {
 		taskDelSrc := &eStreamerEvent.EveDelSource{}
 		taskDelSrc.StreamName = this.streamName
+		taskDelSrc.Id = this.srcId
 		wssAPI.HandleTask(taskDelSrc)
 		logger.LOGT("del source:" + this.streamName)
 		this.srcAdded = false
@@ -119,6 +121,7 @@ func (this *RTMPHandler) ProcessMessage(msg *wssAPI.Msg) (err error) {
 			if true == this.srcAdded {
 				taskDelSrc := &eStreamerEvent.EveDelSource{}
 				taskDelSrc.StreamName = this.streamName
+				taskDelSrc.Id = this.srcId
 				wssAPI.HandleTask(taskDelSrc)
 			}
 		}
@@ -294,6 +297,7 @@ func (this *RTMPHandler) handleInvoke(packet *RTMPPacket) (err error) {
 			return err
 		}
 		this.source = taskAddSrc.SrcObj
+		this.srcId = taskAddSrc.Id
 		if this.source == nil {
 			logger.LOGE("add source failed:")
 			err = this.rtmpInstance.CmdStatus("error", "NetStream.Publish.BadName",
@@ -308,6 +312,7 @@ func (this *RTMPHandler) handleInvoke(packet *RTMPPacket) (err error) {
 			//streamer.DelSource(this.streamName)
 			taskDelSrc := &eStreamerEvent.EveDelSource{}
 			taskDelSrc.StreamName = this.streamName
+			taskDelSrc.Id = this.srcId
 			wssAPI.HandleTask(taskDelSrc)
 			return
 		}

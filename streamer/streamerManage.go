@@ -31,7 +31,7 @@ func addBlackList(blackList *list.List) (err error) {
 		}
 		service.blacks[name] = name
 		if service.blackOn {
-			service.delSource(name)
+			service.delSource(name, 0xffffffff)
 		}
 	}
 	if len(errs) > 0 {
@@ -101,7 +101,7 @@ func delWhiteList(whiteList *list.List) (err error) {
 		}
 		delete(service.whites, name)
 		if service.whiteOn {
-			service.delSource(name)
+			service.delSource(name, 0xffffffff)
 		}
 	}
 	if len(errs) > 0 {

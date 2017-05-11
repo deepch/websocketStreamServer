@@ -19,6 +19,8 @@ type streamSource struct {
 	audioHeader  *flv.FlvTag
 	videoHeader  *flv.FlvTag
 	lastKeyFrame *flv.FlvTag
+	createId     int64
+	mutexId      sync.RWMutex
 }
 
 func (this *streamSource) Init(msg *wssAPI.Msg) (err error) {
