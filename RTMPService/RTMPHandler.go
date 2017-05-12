@@ -182,7 +182,7 @@ func (this *RTMPHandler) HandleRTMPPacket(packet *RTMPPacket) (err error) {
 }
 
 func (this *RTMPHandler) sendFlvToSrc(pkt *RTMPPacket) (err error) {
-	if this.publisher.isPublishing() && this.source != nil {
+	if this.publisher.isPublishing() && wssAPI.InterfaceValid(this.source) {
 		msg := &wssAPI.Msg{}
 		msg.Type = wssAPI.MSG_FLV_TAG
 		msg.Param1 = pkt.ToFLVTag()

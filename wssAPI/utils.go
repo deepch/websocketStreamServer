@@ -10,6 +10,7 @@ import (
 	"logger"
 	"net"
 	"os"
+	"reflect"
 	"time"
 )
 
@@ -138,4 +139,12 @@ func getMd5String(str string) string {
 	h := md5.New()
 	h.Write([]byte(str))
 	return hex.EncodeToString(h.Sum(nil))
+}
+
+func InterfaceIsNil(val interface{}) bool {
+	return reflect.ValueOf(val).IsNil()
+}
+
+func InterfaceValid(val interface{}) bool {
+	return !reflect.ValueOf(val).IsNil()
 }

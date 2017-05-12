@@ -426,14 +426,14 @@ func (this *RTMP) HandleControl(pkt *RTMPPacket) (err error) {
 		logger.LOGT(fmt.Sprintf("stream %d is recorded", streamId))
 	case RTMP_CTRL_pingRequest:
 		streamId, _ := AMF0DecodeInt32(pkt.Body[2:])
-		logger.LOGT(fmt.Sprintf("ping :d", streamId))
+		logger.LOGT(fmt.Sprintf("ping :%d", streamId))
 	case RTMP_CTRL_pingResponse:
 		streamId, _ := AMF0DecodeInt32(pkt.Body[2:])
-		logger.LOGT(fmt.Sprintf("pong :d", streamId))
+		logger.LOGT(fmt.Sprintf("pong :%d", streamId))
 	case RTMP_CTRL_streamBufferEmpty:
-		logger.LOGT(fmt.Sprintf("buffer empty"))
+		//logger.LOGT(fmt.Sprintf("buffer empty"))
 	case RTMP_CTRL_streamBufferReady:
-		logger.LOGT(fmt.Sprintf("buffer ready"))
+		//logger.LOGT(fmt.Sprintf("buffer ready"))
 	default:
 		logger.LOGI(fmt.Sprintf("rtmp control type:%d not processed", ctype))
 	}

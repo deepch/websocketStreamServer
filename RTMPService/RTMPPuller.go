@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"logger"
 	"math/rand"
+	"mediaTypes/flv"
 	"net"
 	"strconv"
 	"sync"
@@ -91,12 +92,12 @@ func (this *RTMPPuller) Stop(msg *wssAPI.Msg) (err error) {
 	this.reading = false
 	this.waitRead.Wait()
 
-	if nil != this.rtmp.Conn {
+	if wssAPI.InterfaceValid(this.rtmp.Conn) {
 		this.rtmp.Conn.Close()
 		this.rtmp.Conn = nil
 	}
 	//del src
-	if nil != this.src {
+	if wssAPI.InterfaceValid(this.src) {
 		taskDelSrc := &eStreamerEvent.EveDelSource{}
 		taskDelSrc.StreamName = this.pullParams.App + "/" + this.pullParams.StreamName
 		taskDelSrc.Id = this.srcId
@@ -214,13 +215,13 @@ func (this *RTMPPuller) threadRead() {
 		case RTMP_PACKET_TYPE_INVOKE:
 			err = this.handleInvoke(packet)
 		case RTMP_PACKET_TYPE_AUDIO:
-			logger.LOGT("audio")
+			err = this.sendFlvToSrc(packet)
 		case RTMP_PACKET_TYPE_VIDEO:
-			logger.LOGT("video")
+			err = this.sendFlvToSrc(packet)
 		case RTMP_PACKET_TYPE_INFO:
-			logger.LOGT("media info")
+			err = this.sendFlvToSrc(packet)
 		case RTMP_PACKET_TYPE_FLASH_VIDEO:
-			logger.LOGT("aggregation")
+			err = this.processAggregation(packet)
 		default:
 			logger.LOGW(fmt.Sprintf("rtmp packet type %d not processed", packet.MessageTypeId))
 		}
@@ -228,6 +229,49 @@ func (this *RTMPPuller) threadRead() {
 			this.reading = false
 		}
 	}
+}
+
+func (this *RTMPPuller) sendFlvToSrc(pkt *RTMPPacket) (err error) {
+	if wssAPI.InterfaceValid(this.src) {
+		msg := &wssAPI.Msg{}
+		msg.Type = wssAPI.MSG_FLV_TAG
+		msg.Param1 = pkt.ToFLVTag()
+		err = this.src.ProcessMessage(msg)
+		if err != nil {
+			logger.LOGE(err.Error())
+			this.Stop(nil)
+		}
+		return
+	} else {
+		logger.LOGE("bad status")
+	}
+	return
+}
+
+func (this *RTMPPuller) processAggregation(pkt *RTMPPacket) (err error) {
+	return
+	cur := 0
+	for cur < len(pkt.Body) {
+		flvPkt := &flv.FlvTag{}
+		flvPkt.StreamID = 0
+		flvPkt.Timestamp = pkt.TimeStamp
+		flvPkt.TagType = pkt.Body[cur]
+		pktLength, _ := AMF0DecodeInt24(pkt.Body[cur+1 : cur+4])
+		flvPkt.Data = make([]byte, pktLength)
+		copy(flvPkt.Data, pkt.Body[cur+11:cur+11+int(pktLength)])
+		cur += 11 + int(pktLength) + 4
+
+		msg := &wssAPI.Msg{}
+		msg.Type = wssAPI.MSG_FLV_TAG
+		msg.Param1 = flvPkt
+		err = this.src.ProcessMessage(msg)
+		if err != nil {
+			logger.LOGE(fmt.Sprintf("send aggregation pkts failed"))
+			return
+		}
+	}
+
+	return
 }
 
 func (this *RTMPPuller) readRTMPPkt() (packet *RTMPPacket, err error) {
@@ -379,7 +423,8 @@ func (this *RTMPPuller) CreatePlaySRC() {
 		if err != nil {
 			logger.LOGE(err.Error())
 		}
-		if taskGet.SrcObj != nil {
+
+		if wssAPI.InterfaceValid(taskGet.SrcObj) {
 			logger.LOGT("some other pulled this stream:" + taskGet.StreamName)
 			this.pullParams.Src <- taskGet.SrcObj
 			this.srcId = 0
@@ -393,13 +438,14 @@ func (this *RTMPPuller) CreatePlaySRC() {
 			logger.LOGE(err.Error())
 			return
 		}
-		if taskAdd.SrcObj == nil {
+		if wssAPI.InterfaceIsNil(taskAdd.SrcObj) {
 			close(this.pullParams.Src)
 			this.reading = false
 			return
 		}
 		this.src = taskAdd.SrcObj
 		this.srcId = taskAdd.Id
+		this.pullParams.Src <- this.src
 		logger.LOGT("add src ok..")
 		return
 	}

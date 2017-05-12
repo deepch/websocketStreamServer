@@ -78,7 +78,6 @@ func (this *StreamerService) HandleTask(task wssAPI.Task) (err error) {
 		taskAddsrc.SrcObj, taskAddsrc.Id, err = this.addsource(taskAddsrc.StreamName)
 
 		return
-
 	case eStreamerEvent.GetSource:
 		taskGetSrc, ok := task.(*eStreamerEvent.EveGetSource)
 		if false == ok {
@@ -90,6 +89,7 @@ func (this *StreamerService) HandleTask(task wssAPI.Task) (err error) {
 		if false == ok {
 			return errors.New("not found:" + taskGetSrc.StreamName)
 		}
+		logger.LOGT(taskGetSrc.SrcObj)
 		//id zero
 		return
 	case eStreamerEvent.DelSource:
@@ -313,7 +313,7 @@ func (this *StreamerService) addSink(path, sinkId string, sinker wssAPI.Obj) (er
 			}
 			//close chan
 			close(chRet)
-			if nil == srcObj {
+			if wssAPI.InterfaceIsNil(srcObj) {
 				return errors.New("source not found in add sink")
 			}
 			src, ok = srcObj.(*streamSource)
