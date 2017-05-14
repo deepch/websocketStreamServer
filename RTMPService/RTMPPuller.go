@@ -77,6 +77,7 @@ func (this *RTMPPuller) Start(msg *wssAPI.Msg) (err error) {
 		return
 	}
 	//start read thread
+	this.rtmp.BytesIn = 3073
 	go this.threadRead()
 	//play
 	err = this.play()
@@ -205,11 +206,14 @@ func (this *RTMPPuller) threadRead() {
 		case RTMP_PACKET_TYPE_CONTROL:
 			err = this.rtmp.HandleControl(packet)
 		case RTMP_PACKET_TYPE_BYTES_READ_REPORT:
+			logger.LOGT("bytes read report")
 		case RTMP_PACKET_TYPE_SERVER_BW:
-			this.rtmp.TargetBW, err = AMF0DecodeInt32(packet.Body)
+			this.rtmp.AcknowledgementWindowSize, err = AMF0DecodeInt32(packet.Body)
+			logger.LOGT(fmt.Sprintf("acknowledgment size %d", this.rtmp.TargetBW))
 		case RTMP_PACKET_TYPE_CLIENT_BW:
 			this.rtmp.SelfBW, err = AMF0DecodeInt32(packet.Body)
 			this.rtmp.LimitType = uint32(packet.Body[4])
+			logger.LOGT(fmt.Sprintf("peer band width %d %d ", this.rtmp.SelfBW, this.rtmp.LimitType))
 		case RTMP_PACKET_TYPE_FLEX_MESSAGE:
 			err = this.handleInvoke(packet)
 		case RTMP_PACKET_TYPE_INVOKE:
@@ -237,6 +241,7 @@ func (this *RTMPPuller) sendFlvToSrc(pkt *RTMPPacket) (err error) {
 		msg.Type = wssAPI.MSG_FLV_TAG
 		msg.Param1 = pkt.ToFLVTag()
 		err = this.src.ProcessMessage(msg)
+		//		logger.LOGT(pkt.TimeStamp)
 		if err != nil {
 			logger.LOGE(err.Error())
 			this.Stop(nil)
@@ -249,7 +254,6 @@ func (this *RTMPPuller) sendFlvToSrc(pkt *RTMPPacket) (err error) {
 }
 
 func (this *RTMPPuller) processAggregation(pkt *RTMPPacket) (err error) {
-	return
 	cur := 0
 	for cur < len(pkt.Body) {
 		flvPkt := &flv.FlvTag{}
@@ -260,7 +264,6 @@ func (this *RTMPPuller) processAggregation(pkt *RTMPPacket) (err error) {
 		flvPkt.Data = make([]byte, pktLength)
 		copy(flvPkt.Data, pkt.Body[cur+11:cur+11+int(pktLength)])
 		cur += 11 + int(pktLength) + 4
-
 		msg := &wssAPI.Msg{}
 		msg.Type = wssAPI.MSG_FLV_TAG
 		msg.Param1 = flvPkt

@@ -160,11 +160,17 @@ func (this *RTMPHandler) HandleRTMPPacket(packet *RTMPPacket) (err error) {
 	case RTMP_PACKET_TYPE_CONTROL:
 		err = this.rtmpInstance.HandleControl(packet)
 	case RTMP_PACKET_TYPE_BYTES_READ_REPORT:
+		logger.LOGT(packet.Body)
+		logger.LOGT(packet.TimeStamp)
+		logger.LOGT(packet.MessageStreamId)
+		logger.LOGT("byteas read repost")
 	case RTMP_PACKET_TYPE_SERVER_BW:
 		this.rtmpInstance.TargetBW, err = AMF0DecodeInt32(packet.Body)
+		logger.LOGT(fmt.Sprintf("确认窗口大小 %d", this.rtmpInstance.TargetBW))
 	case RTMP_PACKET_TYPE_CLIENT_BW:
 		this.rtmpInstance.SelfBW, err = AMF0DecodeInt32(packet.Body)
 		this.rtmpInstance.LimitType = uint32(packet.Body[4])
+		logger.LOGT(fmt.Sprintf("设置对端宽带 %d %d ", this.rtmpInstance.SelfBW, this.rtmpInstance.LimitType))
 	case RTMP_PACKET_TYPE_FLEX_MESSAGE:
 		err = this.handleInvoke(packet)
 	case RTMP_PACKET_TYPE_INVOKE:

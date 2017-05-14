@@ -83,23 +83,24 @@ type RTMPPacket struct {
 }
 
 type RTMP struct {
-	Conn          net.Conn
-	SendChunkSize uint32
-	RecvChunkSize uint32
-	NumInvokes    int32
-	StreamId      uint32
-	Link          RTMP_LINK
-	AudioCodecs   int32
-	VideoCodecs   int32
-	TargetBW      uint32
-	SelfBW        uint32
-	LimitType     uint32
-	BytesIn       int64
-	BytesInLast   int64
-	buffMS        uint32
-	recvCache     map[int32]*RTMPPacket
-	methodCache   map[int32]string
-	mutexMethod   sync.RWMutex
+	Conn                      net.Conn
+	SendChunkSize             uint32
+	RecvChunkSize             uint32
+	NumInvokes                int32
+	StreamId                  uint32
+	Link                      RTMP_LINK
+	AudioCodecs               int32
+	VideoCodecs               int32
+	TargetBW                  uint32
+	AcknowledgementWindowSize uint32
+	SelfBW                    uint32
+	LimitType                 uint32
+	BytesIn                   int64
+	BytesInLast               int64
+	buffMS                    uint32
+	recvCache                 map[int32]*RTMPPacket
+	methodCache               map[int32]string
+	mutexMethod               sync.RWMutex
 }
 
 func (this *RTMPPacket) Copy() (dst *RTMPPacket) {
@@ -148,6 +149,7 @@ func (this *RTMP) Init(conn net.Conn) {
 	this.AudioCodecs = 3191
 	this.VideoCodecs = 252
 	this.TargetBW = 2500000
+	this.AcknowledgementWindowSize = 0
 	this.SelfBW = 2500000
 	this.LimitType = 2
 	this.buffMS = RTMP_default_buff_ms
@@ -177,7 +179,7 @@ func timeAdd(src, delta uint32) (ret uint32) {
 
 func (this *RTMP) ReadChunk() (packet *RTMPPacket, err error) {
 	//接收basic header
-	buf, err := wssAPI.TcpRead(this.Conn, 1)
+	buf, err := this.rtmpSocketRead(1)
 	if err != nil {
 		return
 	}
@@ -186,13 +188,13 @@ func (this *RTMP) ReadChunk() (packet *RTMPPacket, err error) {
 	fmt = buf[0] >> 6
 	chunkId = int32(buf[0] & 0x3f)
 	if chunkId == 0 {
-		buf, err = wssAPI.TcpRead(this.Conn, 1)
+		buf, err = this.rtmpSocketRead(1)
 		if err != nil {
 			return
 		}
 		chunkId = int32(buf[0]) + 64
 	} else if chunkId == 1 {
-		buf, err = wssAPI.TcpRead(this.Conn, 2)
+		buf, err = this.rtmpSocketRead(2)
 		if err != nil {
 			return
 		}
@@ -210,7 +212,7 @@ func (this *RTMP) ReadChunk() (packet *RTMPPacket, err error) {
 	//接收message header
 	switch fmt {
 	case 0:
-		buf, err := wssAPI.TcpRead(this.Conn, 11)
+		buf, err := this.rtmpSocketRead(11)
 		if err != nil {
 			return nil, err
 		}
@@ -220,14 +222,14 @@ func (this *RTMP) ReadChunk() (packet *RTMPPacket, err error) {
 		tmpPkt.MessageTypeId = buf[6]
 		tmpPkt.MessageStreamId, _ = AMF0DecodeInt32LE(buf[7:])
 		if tmpPkt.TimeStamp == 0xffffff {
-			buf, err = wssAPI.TcpRead(this.Conn, 4)
+			buf, err = this.rtmpSocketRead(4)
 			if err != nil {
 				return nil, err
 			}
 			tmpPkt.TimeStamp, _ = AMF0DecodeInt32(buf)
 		}
 	case 1:
-		buf, err := wssAPI.TcpRead(this.Conn, 7)
+		buf, err := this.rtmpSocketRead(7)
 		if err != nil {
 			return nil, err
 		}
@@ -236,7 +238,7 @@ func (this *RTMP) ReadChunk() (packet *RTMPPacket, err error) {
 		tmpPkt.MessageLength, _ = AMF0DecodeInt24(buf[3:])
 		tmpPkt.MessageTypeId = buf[6]
 		if timeDelta == 0xffffff {
-			buf, err = wssAPI.TcpRead(this.Conn, 4)
+			buf, err = this.rtmpSocketRead(4)
 			if err != nil {
 				return nil, err
 			}
@@ -244,7 +246,7 @@ func (this *RTMP) ReadChunk() (packet *RTMPPacket, err error) {
 		}
 		tmpPkt.TimeStamp = timeAdd(tmpPkt.TimeStamp, timeDelta)
 	case 2:
-		buf, err := wssAPI.TcpRead(this.Conn, 3)
+		buf, err := this.rtmpSocketRead(3)
 
 		if err != nil {
 			return nil, err
@@ -253,7 +255,7 @@ func (this *RTMP) ReadChunk() (packet *RTMPPacket, err error) {
 		tmpPkt := this.recvCache[chunkId]
 		timeDelta, _ := AMF0DecodeInt24(buf)
 		if timeDelta == 0xffffff {
-			buf, err = wssAPI.TcpRead(this.Conn, 4)
+			buf, err = this.rtmpSocketRead(4)
 			if err != nil {
 				return nil, err
 			}
@@ -278,7 +280,7 @@ func (this *RTMP) ReadChunk() (packet *RTMPPacket, err error) {
 	if recvsize > this.RecvChunkSize {
 		recvsize = this.RecvChunkSize
 	}
-	tmpBody, err := wssAPI.TcpRead(this.Conn, int(recvsize))
+	tmpBody, err := this.rtmpSocketRead(int(recvsize))
 	if err != nil {
 		return
 	}
@@ -287,6 +289,21 @@ func (this *RTMP) ReadChunk() (packet *RTMPPacket, err error) {
 	//判断是否收到一个完整的包
 	if tmpPkt.BodyReaded == int32(tmpPkt.MessageLength) {
 		packet = tmpPkt.Copy()
+	}
+	return
+}
+
+func (this *RTMP) rtmpSocketRead(size int) (data []byte, err error) {
+	data, err = wssAPI.TcpRead(this.Conn, size)
+	if err != nil {
+		return
+	}
+	if this.AcknowledgementWindowSize > 0 {
+		this.BytesIn += int64(len(data))
+		if this.BytesIn > int64(this.AcknowledgementWindowSize/10)+this.BytesInLast {
+			this.BytesInLast = this.BytesIn
+			this.sendAcknowledgement()
+		}
 	}
 	return
 }
@@ -437,6 +454,26 @@ func (this *RTMP) HandleControl(pkt *RTMPPacket) (err error) {
 	default:
 		logger.LOGI(fmt.Sprintf("rtmp control type:%d not processed", ctype))
 	}
+	return
+}
+
+func (this *RTMP) sendAcknowledgement() (err error) {
+	pkt := &RTMPPacket{}
+	pkt.ChunkStreamID = RTMP_channel_control
+	pkt.Fmt = 0
+	pkt.MessageTypeId = RTMP_PACKET_TYPE_BYTES_READ_REPORT
+	pkt.TimeStamp = 0
+	pkt.MessageStreamId = 0
+	encoder := &AMF0Encoder{}
+	encoder.Init()
+	encoder.EncodeInt32(int32(this.BytesIn))
+	pkt.Body, err = encoder.GetData()
+	if err != nil {
+		return
+	}
+	pkt.MessageLength = uint32(len(pkt.Body))
+	//logger.LOGT(pkt.Body)
+	err = this.SendPacket(pkt, false)
 	return
 }
 
