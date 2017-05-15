@@ -54,6 +54,7 @@ func (this *RTMPPuller) initRTMPLink() {
 func (this *RTMPPuller) Start(msg *wssAPI.Msg) (err error) {
 	defer func() {
 		if err != nil {
+			logger.LOGE("start failed")
 			close(this.pullParams.Src)
 			if nil != this.rtmp.Conn {
 				this.rtmp.Conn.Close()
@@ -90,6 +91,7 @@ func (this *RTMPPuller) Start(msg *wssAPI.Msg) (err error) {
 
 func (this *RTMPPuller) Stop(msg *wssAPI.Msg) (err error) {
 	//stop pull
+	logger.LOGT("stop puller")
 	this.reading = false
 	this.waitRead.Wait()
 

@@ -7,6 +7,7 @@ import (
 	"math/rand"
 	"mediaTypes/flv"
 	"net"
+	"strconv"
 	"sync"
 	"wssAPI"
 )
@@ -54,6 +55,13 @@ const (
 	RTMP_CTRL_pingResponse      = 7
 	RTMP_CTRL_streamBufferEmpty = 31
 	RTMP_CTRL_streamBufferReady = 32
+)
+
+const (
+	RTMP_HEADER_TYPE_0 = 0
+	RTMP_HEADER_TYPE_1 = 1
+	RTMP_HEADER_TYPE_2 = 2
+	RTMP_HEADER_TYPE_3 = 3
 )
 
 type RTMP_LINK struct {
@@ -183,9 +191,9 @@ func (this *RTMP) ReadChunk() (packet *RTMPPacket, err error) {
 	if err != nil {
 		return
 	}
-	var fmt byte
+	var chunkfmt byte
 	var chunkId int32
-	fmt = buf[0] >> 6
+	chunkfmt = (buf[0] & 0xc0) >> 6
 	chunkId = int32(buf[0] & 0x3f)
 	if chunkId == 0 {
 		buf, err = this.rtmpSocketRead(1)
@@ -205,12 +213,13 @@ func (this *RTMP) ReadChunk() (packet *RTMPPacket, err error) {
 		chunkId = int32(tmp16)
 	}
 	if this.recvCache[chunkId] == nil {
+		logger.LOGT("new chunkid " + strconv.Itoa(int(chunkId)))
 		this.recvCache[chunkId] = &RTMPPacket{}
 		this.recvCache[chunkId].Fmt = 0
 	}
 	this.recvCache[chunkId].ChunkStreamID = chunkId
 	//接收message header
-	switch fmt {
+	switch chunkfmt {
 	case 0:
 		buf, err := this.rtmpSocketRead(11)
 		if err != nil {
@@ -267,13 +276,21 @@ func (this *RTMP) ReadChunk() (packet *RTMPPacket, err error) {
 
 	}
 	//接收chunk data
-	tmpPkt := this.recvCache[chunkId]
+	tmpPkt, ok := this.recvCache[chunkId]
+	if false == ok {
+		logger.LOGF("ok")
+	}
 	if tmpPkt.MessageLength == 0 {
+		logger.LOGE("why 0....message length")
 		return
 	}
-	if fmt != 3 {
+	if chunkfmt != 3 {
 		tmpPkt.Body = make([]byte, tmpPkt.MessageLength)
 		tmpPkt.BodyReaded = 0
+	} else {
+		if tmpPkt.BodyReaded == int32(tmpPkt.MessageLength) {
+			tmpPkt.BodyReaded = 0
+		}
 	}
 	//接收小于等于一个chunksize的数据
 	recvsize := tmpPkt.MessageLength - uint32(tmpPkt.BodyReaded)
@@ -282,7 +299,14 @@ func (this *RTMP) ReadChunk() (packet *RTMPPacket, err error) {
 	}
 	tmpBody, err := this.rtmpSocketRead(int(recvsize))
 	if err != nil {
+		logger.LOGE(err.Error())
 		return
+	}
+	if chunkfmt == 3 {
+		if tmpPkt.BodyReaded == int32(tmpPkt.MessageLength) {
+			logger.LOGT(fmt.Sprintf("%d %d", tmpPkt.BodyReaded, tmpPkt.MessageLength))
+			logger.LOGE(tmpBody)
+		}
 	}
 	copy(tmpPkt.Body[tmpPkt.BodyReaded:], tmpBody)
 	tmpPkt.BodyReaded += int32(recvsize)
@@ -302,7 +326,10 @@ func (this *RTMP) rtmpSocketRead(size int) (data []byte, err error) {
 		this.BytesIn += int64(len(data))
 		if this.BytesIn > int64(this.AcknowledgementWindowSize/10)+this.BytesInLast {
 			this.BytesInLast = this.BytesIn
-			this.sendAcknowledgement()
+			if this.BytesIn < int64(this.AcknowledgementWindowSize) {
+
+				this.sendAcknowledgement()
+			}
 		}
 	}
 	return
@@ -442,11 +469,12 @@ func (this *RTMP) HandleControl(pkt *RTMPPacket) (err error) {
 		streamId, _ := AMF0DecodeInt32(pkt.Body[2:])
 		logger.LOGT(fmt.Sprintf("stream %d is recorded", streamId))
 	case RTMP_CTRL_pingRequest:
-		streamId, _ := AMF0DecodeInt32(pkt.Body[2:])
-		logger.LOGT(fmt.Sprintf("ping :%d", streamId))
+		timestamp, _ := AMF0DecodeInt32(pkt.Body[2:])
+		this.pingResponse(timestamp)
+		logger.LOGT(fmt.Sprintf("ping :%d", timestamp))
 	case RTMP_CTRL_pingResponse:
-		streamId, _ := AMF0DecodeInt32(pkt.Body[2:])
-		logger.LOGT(fmt.Sprintf("pong :%d", streamId))
+		timestamp, _ := AMF0DecodeInt32(pkt.Body[2:])
+		logger.LOGF(fmt.Sprintf("pong :%d", timestamp))
 	case RTMP_CTRL_streamBufferEmpty:
 		//logger.LOGT(fmt.Sprintf("buffer empty"))
 	case RTMP_CTRL_streamBufferReady:
@@ -454,6 +482,28 @@ func (this *RTMP) HandleControl(pkt *RTMPPacket) (err error) {
 	default:
 		logger.LOGI(fmt.Sprintf("rtmp control type:%d not processed", ctype))
 	}
+	return
+}
+
+func (this *RTMP) pingResponse(timestamp uint32) (err error) {
+	pkt := &RTMPPacket{}
+	pkt.ChunkStreamID = RTMP_channel_control
+	pkt.Fmt = 0
+	pkt.MessageTypeId = RTMP_PACKET_TYPE_CONTROL
+	pkt.TimeStamp = 0
+	pkt.MessageStreamId = 0
+
+	encoder := &AMF0Encoder{}
+	encoder.Init()
+	encoder.EncodeInt16(RTMP_CTRL_pingResponse)
+	encoder.EncodeInt32(int32(timestamp))
+	pkt.Body, err = encoder.GetData()
+	if err != nil {
+		return
+	}
+	pkt.MessageLength = uint32(len(pkt.Body))
+
+	err = this.SendPacket(pkt, false)
 	return
 }
 
