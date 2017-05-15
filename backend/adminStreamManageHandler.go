@@ -72,5 +72,6 @@ func getRequestData(req *http.Request) StreamManageRequestData {
 
 func doManage(w http.ResponseWriter) {
 	eve := eLiveListCtrl.EveGetLiveList{}
+	wssAPI.HandleTask(eve)
 	fmt.Println(eve)
 }

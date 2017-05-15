@@ -326,10 +326,7 @@ func (this *RTMP) rtmpSocketRead(size int) (data []byte, err error) {
 		this.BytesIn += int64(len(data))
 		if this.BytesIn > int64(this.AcknowledgementWindowSize/10)+this.BytesInLast {
 			this.BytesInLast = this.BytesIn
-			if this.BytesIn < int64(this.AcknowledgementWindowSize) {
-
-				this.sendAcknowledgement()
-			}
+			this.sendAcknowledgement()
 		}
 	}
 	return
@@ -516,7 +513,8 @@ func (this *RTMP) sendAcknowledgement() (err error) {
 	pkt.MessageStreamId = 0
 	encoder := &AMF0Encoder{}
 	encoder.Init()
-	encoder.EncodeInt32(int32(this.BytesIn))
+	param := int32(this.BytesIn & 0xffffffff)
+	encoder.EncodeInt32(param)
 	pkt.Body, err = encoder.GetData()
 	if err != nil {
 		return

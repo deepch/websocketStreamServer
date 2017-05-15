@@ -160,8 +160,9 @@ func (this *RTMPHandler) HandleRTMPPacket(packet *RTMPPacket) (err error) {
 	case RTMP_PACKET_TYPE_CONTROL:
 		err = this.rtmpInstance.HandleControl(packet)
 	case RTMP_PACKET_TYPE_BYTES_READ_REPORT:
-
-		logger.LOGT("byteas read repost")
+		//		logger.LOGT(packet.TimeStamp)
+		//		logger.LOGT(packet.Body)
+		//		logger.LOGT("bytes read repost")
 	case RTMP_PACKET_TYPE_SERVER_BW:
 		this.rtmpInstance.TargetBW, err = AMF0DecodeInt32(packet.Body)
 		logger.LOGT(fmt.Sprintf("确认窗口大小 %d", this.rtmpInstance.TargetBW))
