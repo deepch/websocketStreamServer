@@ -12,8 +12,8 @@ const (
 
 type EveAddSource struct {
 	StreamName string
-	Id         int64 //outPut
-	SrcObj     wssAPI.Obj
+	Id         int64      //outPut
+	SrcObj     wssAPI.Obj //out
 }
 
 func (this *EveAddSource) Receiver() string {
@@ -25,8 +25,8 @@ func (this *EveAddSource) Type() string {
 }
 
 type EveDelSource struct {
-	StreamName string
-	Id         int64
+	StreamName string //in
+	Id         int64  //in
 }
 
 func (this *EveDelSource) Receiver() string {

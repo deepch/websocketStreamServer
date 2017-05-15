@@ -3,6 +3,7 @@ package webSocketService
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"logger"
 	"net/http"
 	"strconv"
@@ -99,6 +100,7 @@ func (this *WebSocketService) ServeHTTP(w http.ResponseWriter, req *http.Request
 		logger.LOGE(err.Error())
 		return
 	}
+	logger.LOGT(fmt.Sprintf("new websocket connect %s", conn.RemoteAddr().String()))
 	this.handleConn(conn, req)
 	defer func() {
 		conn.Close()

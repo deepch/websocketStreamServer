@@ -10,9 +10,9 @@ const (
 )
 
 type EveAddSink struct {
-	StreamName string
-	SinkId     string
-	Sinker     wssAPI.Obj
+	StreamName string     //in
+	SinkId     string     //in
+	Sinker     wssAPI.Obj //in
 }
 
 func (this *EveAddSink) Receiver() string {
@@ -24,8 +24,8 @@ func (this *EveAddSink) Type() string {
 }
 
 type EveDelSink struct {
-	StreamName string
-	SinkId     string
+	StreamName string //in
+	SinkId     string //in
 }
 
 func (this *EveDelSink) Receiver() string {
