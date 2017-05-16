@@ -6,6 +6,7 @@ import (
 	"events/eStreamerEvent"
 	"fmt"
 	"logger"
+	"mediaTypes/amf"
 	"mediaTypes/flv"
 	"mediaTypes/mp4"
 	"sync"
@@ -37,6 +38,7 @@ type websocketHandler struct {
 	hasSource    bool
 	mutexbSource sync.RWMutex
 	source       wssAPI.Obj
+	lastCmd      int
 }
 
 type playInfo struct {
@@ -52,6 +54,7 @@ type playInfo struct {
 func (this *websocketHandler) Init(msg *wssAPI.Msg) (err error) {
 	this.conn = msg.Param1.(*websocket.Conn)
 	this.waitPlaying = new(sync.WaitGroup)
+	this.lastCmd = WSC_invalid
 	return
 }
 
@@ -121,7 +124,7 @@ func (this *websocketHandler) ProcessMessage(msg *wssAPI.Msg) (err error) {
 }
 
 func (this *websocketHandler) processWSMessage(data []byte) (err error) {
-	if nil == data {
+	if nil == data || len(data) < 4 {
 		this.Stop(nil)
 		return
 	}
@@ -131,11 +134,46 @@ func (this *websocketHandler) processWSMessage(data []byte) (err error) {
 	case WS_pkt_video:
 	case WS_pkt_control:
 		logger.LOGT(data)
-
+		return this.controlMsg(data[1:])
 	default:
 		err = errors.New(fmt.Sprintf("msg type %d not supported", msgType))
 		logger.LOGW("invalid binary data")
 		return
+	}
+	return
+}
+
+func (this *websocketHandler) controlMsg(data []byte) (err error) {
+	if nil == data || len(data) < 4 {
+		return errors.New("invalid msg")
+	}
+	ctrlType, err := amf.AMF0DecodeInt24(data)
+	if err != nil {
+		logger.LOGE("get ctrl type failed")
+		return
+	}
+	switch ctrlType {
+	case WSC_play:
+		return this.ctrlPlay(data[3:])
+	case WSC_play2:
+		return this.ctrlPlay2(data[3:])
+	case WSC_resume:
+		return this.ctrlResume(data[3:])
+	case WSC_pause:
+		return this.ctrlPause(data[3:])
+	case WSC_seek:
+		return this.ctrlSeek(data[3:])
+	case WSC_close:
+		return this.ctrlClose(data[3:])
+	case WSC_dispose:
+		return this.ctrlDispose(data[3:])
+	case WSC_publish:
+		return this.ctrlPublish(data[3:])
+	case WSC_onMetaData:
+		return this.ctrlOnMetadata(data[3:])
+	default:
+		logger.LOGE("unknowd websocket control type")
+		return errors.New("invalid ctrl msg type")
 	}
 	return
 }

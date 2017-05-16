@@ -1,15 +1,17 @@
 package webSocketService
 
 import (
+	"wssAPI"
+
 	"github.com/gorilla/websocket"
 )
 
 const (
-	WS_status_ok       = 200
-	WS_status_notfound = 404
+	WS_status_status = "status"
+	WS_status_error  = "error"
 )
 
-//1byte type,
+//1byte type
 const (
 	WS_pkt_audio   = 8
 	WS_pkt_video   = 9
@@ -17,7 +19,8 @@ const (
 )
 
 const (
-	WSC_play = 1 + iota
+	WSC_invalid = 0
+	WSC_play    = 1 + iota
 	WSC_play2
 	WSC_resume
 	WSC_pause
@@ -25,8 +28,40 @@ const (
 	WSC_close
 	WSC_dispose
 	WSC_publish
-	WSC_onMetaData = "onMetaData"
+	WSC_onMetaData
 )
+
+var cmdsMap map[int]*wssAPI.Set
+
+func init() {
+	cmdsMap = make(map[int]*wssAPI.Set)
+	//初始状态，可以play,close,publish
+	{
+		tmp := wssAPI.NewSet()
+		tmp.Add(WSC_play)
+		tmp.Add(WSC_play2)
+		tmp.Add(WSC_close)
+		tmp.Add(WSC_publish)
+		cmdsMap[WSC_invalid] = tmp
+	}
+	//play 可以close pause seek
+	{
+		tmp := wssAPI.NewSet()
+		tmp.Add(WSC_pause)
+		tmp.Add(WSC_seek)
+		tmp.Add(WSC_close)
+		cmdsMap[WSC_play] = tmp
+	}
+	//play2 ?
+}
+
+func supportNewCmd(cmdOld, cmdNew int) bool {
+	_, exist := cmdsMap[cmdOld]
+	if false == exist {
+		return false
+	}
+	return cmdsMap[cmdOld].Has(cmdNew)
+}
 
 func SendWsControl(conn *websocket.Conn, ctrlType int, data []byte) (err error) {
 	dataSend := make([]byte, len(data)+2)
@@ -35,3 +70,92 @@ func SendWsControl(conn *websocket.Conn, ctrlType int, data []byte) (err error) 
 	copy(dataSend[2:], data)
 	return conn.WriteMessage(websocket.BinaryMessage, dataSend)
 }
+
+type stPlay struct {
+	Name  string `json:"name"`
+	Start int    `json:"start"`
+	Len   int    `json:"len"`
+	Reset int    `json:"reset"`
+	Req   int    `json:"req"`
+}
+
+type stPlay2 struct {
+	Name  string `json:"name"`
+	Start int    `json:"start"`
+	Len   int    `json:"len"`
+	Reset int    `json:"reset"`
+	Req   int    `json:"req"`
+}
+
+type stResume struct {
+	Req int `json:"req"`
+}
+
+type stPause struct {
+	Req int `json:"req"`
+}
+
+type stSeek struct {
+	Offset int `json:"offset"`
+	Req    int `json:"req"`
+}
+
+type stClose struct {
+	Req int `json:"req"`
+}
+
+type stDispose struct {
+	Req int `json:"req"`
+}
+
+type stPublish struct {
+	Name string `json:"name"`
+	Type string `json:"type"`
+	Req  int    `json:"req"`
+}
+
+type stResult struct {
+	Level string `json:"levle"`
+	Code  string `json:"code"`
+	Req   int    `json:"req"`
+}
+
+const (
+	NETCONNECTION_CALL_FAILED         = "NetConnection.Call.Failed"
+	NETCONNECTION_CONNECT_APPSHUTDOWN = "NetConnection.Connect.AppShutdown"
+	NETCONNECTION_CONNECT_CLOSED      = "NetConnection.Connect.Closed"
+	NETCONNECTION_CONNECT_FAILED      = "NetConnection.Connect.Failed"
+	NETCONNECTION_CONNECT_IDLETIMEOUT = "NetConnection.Connect.IdleTimeout"
+	NETCONNECTION_CONNECT_INVALIDAPP  = "NetConnection.Connect.InvalidApp"
+	NETCONNECTION_CONNECT_REJECTED    = "NetConnection.Connect.Rejected"
+	NETCONNECTION_CONNECT_SUCCESS     = "NetConnection.Connect.Success"
+
+	NETSTREAM_BUFFER_EMPTY              = "NetStream.Buffer.Empty"
+	NETSTREAM_BUFFER_FLUSH              = "NetStream.Buffer.Flush"
+	NETSTREAM_BUFFER_FULL               = "NetStream.Buffer.Full"
+	NETSTREAM_FAILED                    = "NetStream.Failed"
+	NETSTREAM_PAUSE_NOTIFY              = "NetStream.Pause.Notify"
+	NETSTREAM_PLAY_FAILED               = "NetStream.Play.Failed"
+	NETSTREAM_PLAY_FILESTRUCTUREINVALID = "NetStream.Play.FileStructureInvalid"
+	NETSTREAM_PLAY_PUBLISHNOTIFY        = "NetStream.Play.PublishNotify"
+	NETSTREAM_PLAY_RESET                = "NetStream.Play.Reset"
+	NETSTREAM_PLAY_START                = "NetStream.Play.Start"
+	NETSTREAM_PLAY_STOP                 = "NetStream.Play.Stop"
+	NETSTREAM_PLAY_STREAMNOTFOUND       = "NetStream.Play.StreamNotFound"
+	NETSTREAM_PLAY_UNPUBLISHNOTIFY      = "NetStream.Play.UnpublishNotify"
+	NETSTREAM_PUBLISH_BADNAME           = "NetStream.Publish.BadName"
+	NETSTREAM_PUBLISH_IDLE              = "NetStream.Publish.Idle"
+	NETSTREAM_PUBLISH_START             = "NetStream.Publish.Start"
+	NETSTREAM_RECORD_ALREADYEXISTS      = "NetStream.Record.AlreadyExists"
+	NETSTREAM_RECORD_FAILED             = "NetStream.Record.Failed"
+	NETSTREAM_RECORD_NOACCESS           = "NetStream.Record.NoAccess"
+	NETSTREAM_RECORD_START              = "NetStream.Record.Start"
+	NETSTREAM_RECORD_STOP               = "NetStream.Record.Stop"
+	NETSTREAM_SEEK_FAILED               = "NetStream.Seek.Failed"
+	NETSTREAM_SEEK_INVALIDTIME          = "NetStream.Seek.InvalidTime"
+	NETSTREAM_SEEK_NOTIFY               = "NetStream.Seek.Notify"
+	NETSTREAM_STEP_NOTIFY               = "NetStream.Step.Notify"
+	NETSTREAM_UNPAUSE_NOTIFY            = "NetStream.Unpause.Notify"
+	NETSTREAM_UNPUBLISH_SUCCESS         = "NetStream.Unpublish.Success"
+	NETSTREAM_VIDEO_DIMENSIONCHANGE     = "NetStream.Video.DimensionChange"
+)
