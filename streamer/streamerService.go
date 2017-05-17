@@ -190,6 +190,7 @@ func (this *StreamerService) createSrcFromUpstream(app, streamName string, chRet
 	if exist == false {
 		logger.LOGE(fmt.Sprintf("%s upstream not found", app))
 		this.mutexUpStream.RUnlock()
+		close(chRet)
 		return
 	}
 	this.mutexUpStream.RUnlock()

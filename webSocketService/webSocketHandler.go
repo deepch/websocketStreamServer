@@ -10,6 +10,7 @@ import (
 	"mediaTypes/flv"
 	"mediaTypes/mp4"
 	"sync"
+	"time"
 	"wssAPI"
 
 	"github.com/gorilla/websocket"
@@ -63,6 +64,9 @@ func (this *websocketHandler) Start(msg *wssAPI.Msg) (err error) {
 }
 
 func (this *websocketHandler) Stop(msg *wssAPI.Msg) (err error) {
+	if WSC_play == this.lastCmd || WSC_play2 == this.lastCmd {
+		this.stopPlay()
+	}
 	return
 }
 
@@ -70,7 +74,7 @@ func (this *websocketHandler) GetType() string {
 	return wsHandler
 }
 
-func (this *websocketHandler) HandleTask(task *wssAPI.Task) (err error) {
+func (this *websocketHandler) HandleTask(task wssAPI.Task) (err error) {
 	return
 }
 
@@ -78,49 +82,38 @@ func (this *websocketHandler) ProcessMessage(msg *wssAPI.Msg) (err error) {
 	switch msg.Type {
 	case wssAPI.MSG_FLV_TAG:
 		tag := msg.Param1.(*flv.FlvTag)
-		switch tag.TagType {
-		case flv.FLV_TAG_Audio:
-			if this.stPlay.audioHeader == nil {
-				this.stPlay.audioHeader = tag
-				this.stPlay.audioHeader.Timestamp = 0
-				return
-			}
-		case flv.FLV_TAG_Video:
-			if this.stPlay.videoHeader == nil {
-				this.stPlay.videoHeader = tag
-				this.stPlay.videoHeader.Timestamp = 0
-				return
-			}
-			if false == this.stPlay.keyFrameWrited {
-				if (tag.Data[0] >> 4) == 1 {
-					this.stPlay.keyFrameWrited = true
-					this.stPlay.beginTime = tag.Timestamp
-					this.stPlay.addInitPkts()
-				} else {
-					return
-				}
-			}
-
-		case flv.FLV_TAG_ScriptData:
-			if this.stPlay.metadata == nil {
-				this.stPlay.metadata = tag
-
-				return nil
-			}
-		}
-		if false == this.stPlay.keyFrameWrited {
-			return
-		}
-		tag.Timestamp -= this.stPlay.beginTime
-		this.stPlay.mutexCache.Lock()
-		this.stPlay.cache.PushBack(tag)
-		this.stPlay.mutexCache.Unlock()
+		this.appendFlvTag(tag)
 	case wssAPI.MSG_PLAY_START:
+		this.startPlay()
 	case wssAPI.MSG_PLAY_STOP:
+		this.stopPlay()
 	case wssAPI.MSG_PUBLISH_START:
 	case wssAPI.MSG_PUBLISH_STOP:
 	}
 	return
+}
+
+func (this *websocketHandler) appendFlvTag(tag *flv.FlvTag) {
+	tag = tag.Copy()
+	if this.stPlay.beginTime == 0 && tag.Timestamp > 0 {
+		this.stPlay.beginTime = tag.Timestamp
+	}
+	tag.Timestamp -= this.stPlay.beginTime
+	if false == this.stPlay.keyFrameWrited && tag.TagType == flv.FLV_TAG_Video {
+		if this.stPlay.videoHeader == nil {
+			this.stPlay.videoHeader = tag
+		} else {
+			if (tag.Data[0] >> 4) == 1 {
+				this.stPlay.keyFrameWrited = true
+			} else {
+				return
+			}
+		}
+
+	}
+	this.stPlay.mutexCache.Lock()
+	defer this.stPlay.mutexCache.Unlock()
+	this.stPlay.cache.PushBack(tag)
 }
 
 func (this *websocketHandler) processWSMessage(data []byte) (err error) {
@@ -152,6 +145,7 @@ func (this *websocketHandler) controlMsg(data []byte) (err error) {
 		logger.LOGE("get ctrl type failed")
 		return
 	}
+	logger.LOGT(ctrlType)
 	switch ctrlType {
 	case WSC_play:
 		return this.ctrlPlay(data[3:])
@@ -213,7 +207,7 @@ func (this *websocketHandler) addSink(streamName, clientId string, sinker wssAPI
 	taskAddsink := &eStreamerEvent.EveAddSink{StreamName: streamName, SinkId: clientId, Sinker: sinker}
 	err = wssAPI.HandleTask(taskAddsink)
 	if err != nil {
-		logger.LOGE(fmt.Sprintf("add sink %s %s failed :\n%s", streamName, clientId, err.Error()))
+		logger.LOGE(fmt.Sprintf("add sink %s %s failed :%s", streamName, clientId, err.Error()))
 		return
 	}
 	return
@@ -251,4 +245,54 @@ func (this *playInfo) addInitPkts() {
 	if this.metadata != nil {
 		this.cache.PushBack(this.metadata)
 	}
+}
+
+func (this *websocketHandler) startPlay() {
+	this.stPlay.reset()
+	go this.threadPlay()
+}
+
+func (this *websocketHandler) threadPlay() {
+	this.isPlaying = true
+	this.waitPlaying.Add(1)
+	defer func() {
+		this.waitPlaying.Done()
+		this.stPlay.reset()
+	}()
+	fmp4Creater := &mp4.FMP4Creater{}
+	for true == this.isPlaying {
+		this.stPlay.mutexCache.Lock()
+		if this.stPlay.cache == nil || this.stPlay.cache.Len() == 0 {
+			this.stPlay.mutexCache.Unlock()
+			time.Sleep(30 * time.Millisecond)
+			continue
+		}
+		tag := this.stPlay.cache.Front().Value.(*flv.FlvTag)
+		this.stPlay.cache.Remove(this.stPlay.cache.Front())
+		this.stPlay.mutexCache.Unlock()
+		slice := fmp4Creater.AddFlvTag(tag)
+		if slice != nil {
+			err := this.sendFmp4Slice(slice)
+			if err != nil {
+				logger.LOGE(err.Error())
+				this.isPlaying = false
+			}
+		}
+	}
+}
+
+func (this *websocketHandler) sendFmp4Slice(slice *mp4.FMP4Slice) (err error) {
+	dataSend := make([]byte, len(slice.Data)+1)
+	dataSend[0] = byte(slice.Type)
+	copy(dataSend[1:], slice.Data)
+	err = this.conn.WriteMessage(websocket.BinaryMessage, dataSend)
+	return
+}
+
+func (this *websocketHandler) stopPlay() {
+	this.isPlaying = false
+	this.waitPlaying.Wait()
+	this.delSink(this.streamName, this.clientId)
+	this.stPlay.reset()
+	SendWsStatus(this.conn, WS_status_status, NETSTREAM_PLAY_STOP, 0)
 }

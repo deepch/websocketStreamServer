@@ -42,12 +42,13 @@ func (this *WebSocketService) Init(msg *wssAPI.Msg) (err error) {
 
 	go func() {
 		strPort := ":" + strconv.Itoa(serviceConfig.Port)
+		path := serviceConfig.PlayPath
 		if len(serviceConfig.PlayPath) > 0 {
 			if strings.HasPrefix(serviceConfig.PlayPath, "/") == false {
-				serviceConfig.PlayPath = "/" + serviceConfig.PlayPath
+				path = "/" + serviceConfig.PlayPath
 			}
 		}
-		http.Handle(serviceConfig.PlayPath, http.StripPrefix(serviceConfig.PlayPath, this))
+		http.Handle(path, http.StripPrefix(path, this))
 		err = http.ListenAndServe(strPort, nil)
 		if err != nil {
 			logger.LOGE("start websocket failed:" + err.Error())

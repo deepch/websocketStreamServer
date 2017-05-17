@@ -200,6 +200,6 @@ func (this *StreamerService) SetParent(parent wssAPI.Obj) {
 func (this *StreamerService) badIni() {
 	logger.LOGW("some bad init here!!!")
 	//taskAddUp := eLiveListCtrl.NewSetUpStreamApp(true, "live", "rtmp", "live.hkstv.hk.lxdns.com", 1935)
-	taskAddUp := eLiveListCtrl.NewSetUpStreamApp(true, "live", "rtmp", "127.0.0.1", 1935)
-	this.HandleTask(taskAddUp)
+	//	taskAddUp := eLiveListCtrl.NewSetUpStreamApp(true, "live", "rtmp", "127.0.0.1", 1935)
+	//	this.HandleTask(taskAddUp)
 }

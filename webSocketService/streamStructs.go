@@ -1,6 +1,8 @@
 package webSocketService
 
 import (
+	"encoding/json"
+	"logger"
 	"wssAPI"
 
 	"github.com/gorilla/websocket"
@@ -20,7 +22,7 @@ const (
 
 const (
 	WSC_invalid = 0
-	WSC_play    = 1 + iota
+	WSC_play    = iota
 	WSC_play2
 	WSC_resume
 	WSC_pause
@@ -64,11 +66,30 @@ func supportNewCmd(cmdOld, cmdNew int) bool {
 }
 
 func SendWsControl(conn *websocket.Conn, ctrlType int, data []byte) (err error) {
-	dataSend := make([]byte, len(data)+2)
+	dataSend := make([]byte, len(data)+4)
 	dataSend[0] = WS_pkt_control
-	dataSend[1] = byte(ctrlType)
-	copy(dataSend[2:], data)
+	dataSend[1] = byte((ctrlType >> 16) & 0xff)
+	dataSend[2] = byte((ctrlType >> 8) & 0xff)
+	dataSend[3] = byte((ctrlType >> 0) & 0xff)
+	copy(dataSend[4:], data)
 	return conn.WriteMessage(websocket.BinaryMessage, dataSend)
+}
+
+func SendWsStatus(conn *websocket.Conn, level, code string, req int) (err error) {
+	st := &stResult{Level: level, Code: code, Req: req}
+	dataJson, err := json.Marshal(st)
+	if err != nil {
+		logger.LOGE(err.Error())
+		return
+	}
+	dataSend := make([]byte, len(dataJson)+4)
+	dataSend[0] = 0
+	dataSend[1] = 0
+	dataSend[2] = 0
+	dataSend[3] = 0
+	copy(dataSend[4:], dataJson)
+	err = conn.WriteMessage(websocket.BinaryMessage, dataSend)
+	return
 }
 
 type stPlay struct {
@@ -115,7 +136,7 @@ type stPublish struct {
 }
 
 type stResult struct {
-	Level string `json:"levle"`
+	Level string `json:"level"`
 	Code  string `json:"code"`
 	Req   int    `json:"req"`
 }

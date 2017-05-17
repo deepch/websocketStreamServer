@@ -23,29 +23,23 @@ func main() {
 
 }
 
+type stPlay struct {
+	Name  string `json:"name"`
+	Start int    `json:"start"`
+	Len   int    `json:"len"`
+	Reset int    `json:"reset"`
+	Req   int    `json:"req"`
+}
+
 func Play(conn *websocket.Conn) {
-	//connect
-	stConnect := &webSocketService.WsConnect{}
-	stConnect.App = "live"
-	stConnect.ID = 0
-	stConnect.TcUrl = "ws://127.0.0.1:8080/live"
-	dataSend, _ := json.Marshal(stConnect)
-	err := webSocketService.SendWsControl(conn, webSocketService.WS_ctrl_connect, dataSend)
-	if err != nil {
-		logger.LOGE(err.Error())
-		return
-	}
-	err = readResult(conn)
-	if err != nil {
-		logger.LOGE(err.Error())
-		return
-	}
+
 	//play
-	stPlay := &webSocketService.WsPlay{}
-	stPlay.ID = 0
-	stPlay.StreamName = "test"
-	dataSend, _ = json.Marshal(stPlay)
-	err = webSocketService.SendWsControl(conn, webSocketService.WS_ctrl_play, dataSend)
+	stPlay := &stPlay{}
+
+	stPlay.Name = "test"
+
+	dataSend, _ := json.Marshal(stPlay)
+	err := webSocketService.SendWsControl(conn, webSocketService.WSC_play, dataSend)
 	if err != nil {
 		logger.LOGE(err.Error())
 		return
@@ -60,21 +54,7 @@ func Play(conn *websocket.Conn) {
 		logger.LOGE(err.Error())
 		return
 	}
-	//read packet
-	//stopPlay
-	stStop := &webSocketService.WsStopPlay{}
-	stStop.ID = 0
-	dataSend, _ = json.Marshal(stStop)
-	//err = webSocketService.SendWsControl(conn, webSocketService.WS_ctrl_stopPlay, dataSend)
-	if err != nil {
-		logger.LOGE(err.Error())
-		return
-	}
-	err = readResult(conn)
-	if err != nil {
-		logger.LOGE(err.Error())
-		return
-	}
+
 	for {
 		readResult(conn)
 	}
@@ -89,6 +69,7 @@ func readResult(conn *websocket.Conn) (err error) {
 		return
 	}
 	if msgType == websocket.BinaryMessage {
+		logger.LOGT(data)
 		pktType := data[0]
 		switch pktType {
 		case webSocketService.WS_pkt_audio:
@@ -96,17 +77,7 @@ func readResult(conn *websocket.Conn) (err error) {
 		case webSocketService.WS_pkt_video:
 			logger.LOGT("video")
 		case webSocketService.WS_pkt_control:
-			switch data[1] {
-			case webSocketService.WS_ctrl_result:
-				stResult := &webSocketService.WsResult{}
-				json.Unmarshal(data[2:], stResult)
-				logger.LOGT(*stResult)
-			case webSocketService.WS_ctrl_streamBegin:
-				logger.LOGT("stream begin")
-			case webSocketService.WS_ctrl_streamEnd:
-				logger.LOGT("stream end")
-			}
-
+			logger.LOGT(data)
 		}
 	}
 	return
