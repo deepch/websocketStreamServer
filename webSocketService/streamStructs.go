@@ -21,40 +21,65 @@ const (
 )
 
 const (
-	WSC_invalid = 0
-	WSC_play    = iota
-	WSC_play2
-	WSC_resume
-	WSC_pause
-	WSC_seek
-	WSC_close
-	WSC_dispose
-	WSC_publish
-	WSC_onMetaData
+	WSC_play       = 1
+	WSC_play2      = 2
+	WSC_resume     = 3
+	WSC_pause      = 4
+	WSC_seek       = 5
+	WSC_close      = 6
+	WSC_dispose    = 7
+	WSC_publish    = 8
+	WSC_onMetaData = 9
 )
 
 var cmdsMap map[int]*wssAPI.Set
 
 func init() {
 	cmdsMap = make(map[int]*wssAPI.Set)
-	//初始状态，可以play,close,publish
+	//初始状态close，可以play,close,publish
 	{
 		tmp := wssAPI.NewSet()
 		tmp.Add(WSC_play)
 		tmp.Add(WSC_play2)
 		tmp.Add(WSC_close)
 		tmp.Add(WSC_publish)
-		cmdsMap[WSC_invalid] = tmp
+		cmdsMap[WSC_close] = tmp
 	}
 	//play 可以close pause seek
 	{
 		tmp := wssAPI.NewSet()
 		tmp.Add(WSC_pause)
+		tmp.Add(WSC_play)
+		tmp.Add(WSC_play2)
 		tmp.Add(WSC_seek)
 		tmp.Add(WSC_close)
 		cmdsMap[WSC_play] = tmp
 	}
-	//play2 ?
+	//play2 =play
+	{
+		tmp := wssAPI.NewSet()
+		tmp.Add(WSC_pause)
+		tmp.Add(WSC_play)
+		tmp.Add(WSC_play2)
+		tmp.Add(WSC_seek)
+		tmp.Add(WSC_close)
+		cmdsMap[WSC_play2] = tmp
+	}
+	//pause
+	{
+		tmp := wssAPI.NewSet()
+		tmp.Add(WSC_resume)
+		tmp.Add(WSC_play)
+		tmp.Add(WSC_play2)
+		tmp.Add(WSC_close)
+		cmdsMap[WSC_pause] = tmp
+	}
+	//publish
+	{
+		tmp := wssAPI.NewSet()
+		tmp.Add(WSC_close)
+		cmdsMap[WSC_publish] = tmp
+	}
 }
 
 func supportNewCmd(cmdOld, cmdNew int) bool {
@@ -83,7 +108,7 @@ func SendWsStatus(conn *websocket.Conn, level, code string, req int) (err error)
 		return
 	}
 	dataSend := make([]byte, len(dataJson)+4)
-	dataSend[0] = 0
+	dataSend[0] = WS_pkt_control
 	dataSend[1] = 0
 	dataSend[2] = 0
 	dataSend[3] = 0

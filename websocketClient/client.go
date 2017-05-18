@@ -2,9 +2,11 @@ package main
 
 import (
 	"encoding/json"
+	"fmt"
 	"logger"
 	"net/http"
 	"webSocketService"
+	"wssAPI"
 
 	"github.com/gorilla/websocket"
 )
@@ -13,6 +15,8 @@ func main() {
 	logger.SetFlags(logger.LOG_SHORT_FILE)
 	cli := &websocket.Dialer{}
 	req := http.Header{}
+	SetTest()
+	return
 	conn, _, err := cli.Dial("ws://127.0.0.1:8080/live", req)
 	if err != nil {
 		logger.LOGE(err.Error())
@@ -21,6 +25,14 @@ func main() {
 	Play(conn)
 	defer conn.Close()
 
+}
+func SetTest() {
+	si := wssAPI.NewSet()
+	si.Add("111")
+	si.Add(2)
+	fmt.Println(si.Has(3))
+	fmt.Println(si.Has(2))
+	fmt.Println(si.Has("111"))
 }
 
 type stPlay struct {
@@ -54,7 +66,6 @@ func Play(conn *websocket.Conn) {
 		logger.LOGE(err.Error())
 		return
 	}
-
 	for {
 		readResult(conn)
 	}

@@ -138,6 +138,11 @@ func (this *streamSource) AddSink(id string, sinker wssAPI.Obj) (err error) {
 	this.sinks[id] = sink
 	if this.bProducer {
 		err = sink.Start(nil)
+		if this.metadata != nil {
+			msg.Param1 = this.metadata
+			msg.Type = wssAPI.MSG_FLV_TAG
+			sink.ProcessMessage(msg)
+		}
 		if this.audioHeader != nil {
 			msg.Param1 = this.audioHeader
 			msg.Type = wssAPI.MSG_FLV_TAG
@@ -145,11 +150,6 @@ func (this *streamSource) AddSink(id string, sinker wssAPI.Obj) (err error) {
 		}
 		if this.videoHeader != nil {
 			msg.Param1 = this.videoHeader
-			msg.Type = wssAPI.MSG_FLV_TAG
-			sink.ProcessMessage(msg)
-		}
-		if this.metadata != nil {
-			msg.Param1 = this.metadata
 			msg.Type = wssAPI.MSG_FLV_TAG
 			sink.ProcessMessage(msg)
 		}

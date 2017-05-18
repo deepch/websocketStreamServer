@@ -55,7 +55,7 @@ type playInfo struct {
 func (this *websocketHandler) Init(msg *wssAPI.Msg) (err error) {
 	this.conn = msg.Param1.(*websocket.Conn)
 	this.waitPlaying = new(sync.WaitGroup)
-	this.lastCmd = WSC_invalid
+	this.lastCmd = WSC_close
 	return
 }
 
@@ -64,9 +64,7 @@ func (this *websocketHandler) Start(msg *wssAPI.Msg) (err error) {
 }
 
 func (this *websocketHandler) Stop(msg *wssAPI.Msg) (err error) {
-	if WSC_play == this.lastCmd || WSC_play2 == this.lastCmd {
-		this.stopPlay()
-	}
+	this.doClose()
 	return
 }
 
@@ -270,6 +268,17 @@ func (this *websocketHandler) threadPlay() {
 		tag := this.stPlay.cache.Front().Value.(*flv.FlvTag)
 		this.stPlay.cache.Remove(this.stPlay.cache.Front())
 		this.stPlay.mutexCache.Unlock()
+		if WSC_pause == this.lastCmd {
+			continue
+		}
+		if tag.TagType == flv.FLV_TAG_ScriptData {
+			err := SendWsControl(this.conn, WSC_onMetaData, tag.Data)
+			if err != nil {
+				logger.LOGE(err.Error())
+				this.isPlaying = false
+			}
+			continue
+		}
 		slice := fmp4Creater.AddFlvTag(tag)
 		if slice != nil {
 			err := this.sendFmp4Slice(slice)
@@ -295,4 +304,8 @@ func (this *websocketHandler) stopPlay() {
 	this.delSink(this.streamName, this.clientId)
 	this.stPlay.reset()
 	SendWsStatus(this.conn, WS_status_status, NETSTREAM_PLAY_STOP, 0)
+}
+
+func (this *websocketHandler) stopPublish() {
+	logger.LOGE("stop publish not code")
 }
