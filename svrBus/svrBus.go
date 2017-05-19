@@ -163,7 +163,7 @@ func (this *SvrBus) Start(msg *wssAPI.Msg) (err error) {
 	this.mutexServices.RLock()
 	defer this.mutexServices.RUnlock()
 	for k, v := range this.services {
-		v.SetParent(this)
+		//v.SetParent(this)
 		err = v.Start(nil)
 		if err != nil {
 			logger.LOGE("start " + k + " failed:" + err.Error())

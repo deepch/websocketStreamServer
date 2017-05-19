@@ -28,7 +28,7 @@ type Obj interface {
 	GetType() string
 	HandleTask(task Task) error
 	ProcessMessage(msg *Msg) error
-	SetParent(parent Obj)
+	//	SetParent(parent Obj)
 }
 
 var svrbus Obj
