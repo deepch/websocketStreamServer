@@ -4,9 +4,11 @@ import (
 	"fmt"
 	"net/http"
 	"strconv"
-	//"streamer"
 	"events/eLiveListCtrl"
+	"events/eStreamerEvent"
+	"events/eRTMPEvent"
 	"wssAPI"
+	"errors"
 )
 
 type AdminStreamManageHandler struct {
@@ -17,12 +19,9 @@ type StreamManageRequestData struct {
 	Action Action
 }
 
-//var managers streamer.StreamerService
 
 func (this *AdminStreamManageHandler) Init(data *wssAPI.Msg) (err error) {
 	this.Route = "/admin/stream/manage"
-	//	managers := &streamer.StreamerService{}
-	//	managers.Init(nil)
 	return
 }
 
@@ -74,4 +73,64 @@ func doManage(w http.ResponseWriter) {
 	eve := eLiveListCtrl.EveGetLiveList{}
 	wssAPI.HandleTask(&eve)
 	fmt.Println(eve)
+}
+
+
+func getReuqestActionEvent(req *http.Request)(wssAPI.Task, error){
+	actionCode := req.PostFormValue("action_code")
+	liveName := req.PostFormValue("live_name")
+	if len(actionCode)==0{
+		return nil,errors.New("no action code")
+	}
+
+	intCode,err :=strconv.Atoi(actionCode)
+
+	var task wssAPI.Task
+	if err != nil{
+		return nil, errors.New("action code is error")
+	}
+	switch intCode{
+		case WS_SHOW_ALL_STREAM:
+			eve := &eLiveListCtrl.EveGetLiveList{}
+			task = eve
+		case WS_GET_LIVE_PLAYER_COUNT:
+			eve := &eLiveListCtrl.EveGetLivePlayerCount{}
+			eve.LiveName = liveName
+			task = eve
+		case WS_ENABLE_BLACK_LIST:
+			eve := &eLiveListCtrl.EveEnableBlackList{}
+			//eve.Enable = true
+			task = eve
+		case WS_SET_BLACK_LIST:
+			eve := &eLiveListCtrl.EveSetBlackList{}
+			//eve.Add = true
+		case WS_ENABLE_WHITE_LIST:
+			eve := &eLiveListCtrl.EveEnableWhiteList{}
+			task = eve
+		case WS_SET_WHITE_LIST:
+			task = &eLiveListCtrl.EveSetWhiteList{}
+		case WS_SET_UP_STREAM_APP:
+			eve := &eLiveListCtrl.EveSetUpStreamApp{}
+		case WS_PULL_RTMP_STREAM:
+			task = &eRTMPEvent.EvePullRTMPStream{}
+		case WS_ADD_SINK:
+			task = &eStreamerEvent.EveAddSink{}
+		case WS_DEL_SINK:
+			task = &eStreamerEvent.EveDelSink{}
+		case WS_ADD_SOURCE:
+			task = &eStreamerEvent.EveAddSource{}
+		case WS_DEL_SOURCE:
+			task = &eStreamerEvent.EveDelSource{}
+		case WS_GET_SOURCE:
+			task = &eStreamerEvent.EveGetSource{}
+		default:
+			task = nil
+	}
+	if task == nil{
+		return nil, errors.New("no function")
+	}
+
+	wssAPI.HandleTask(task)
+
+	return task, nil
 }
