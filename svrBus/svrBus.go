@@ -2,6 +2,7 @@ package svrBus
 
 import (
 	"RTMPService"
+	"RTSPService"
 	"backend"
 	"encoding/json"
 	"errors"
@@ -21,6 +22,7 @@ type busConfig struct {
 	WebSocketConfigName string `json:"WebSocket"`
 	BackendConfigName   string `json:"Backend"`
 	LogPath             string `json:"LogPath"`
+	RTSPConfigName      string `json:"RTSP"`
 }
 
 type SvrBus struct {
@@ -114,6 +116,15 @@ func (this *SvrBus) loadConfig() (err error) {
 		this.mutexServices.Unlock()
 	}
 
+	if len(cfg.RTSPConfigName) > 0 {
+		rtspSvr := &RTSPService.RTSPService{}
+		msg := &wssAPI.Msg{}
+		msg.Param1 = cfg.RTSPConfigName
+		rtspSvr.Init(msg)
+		this.mutexServices.Lock()
+		this.services[rtspSvr.GetType()] = rtspSvr
+		this.mutexServices.Unlock()
+	}
 	return
 }
 

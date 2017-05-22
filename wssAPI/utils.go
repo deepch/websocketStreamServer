@@ -142,9 +142,15 @@ func getMd5String(str string) string {
 }
 
 func InterfaceIsNil(val interface{}) bool {
+	if nil == val {
+		return true
+	}
 	return reflect.ValueOf(val).IsNil()
 }
 
 func InterfaceValid(val interface{}) bool {
+	if nil == val {
+		return false
+	}
 	return !reflect.ValueOf(val).IsNil()
 }

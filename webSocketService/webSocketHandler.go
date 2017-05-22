@@ -87,6 +87,7 @@ func (this *websocketHandler) ProcessMessage(msg *wssAPI.Msg) (err error) {
 		this.startPlay()
 	case wssAPI.MSG_PLAY_STOP:
 		this.stopPlay()
+		logger.LOGT("play stop message")
 	case wssAPI.MSG_PUBLISH_START:
 	case wssAPI.MSG_PUBLISH_STOP:
 	}
