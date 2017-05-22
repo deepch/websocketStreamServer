@@ -151,7 +151,6 @@ func (this *FMP4Creater) createAudioInitSeg(tag *flv.FlvTag) (slice *FMP4Slice) 
 		logger.LOGT(this.audioSampleRate)
 		//		soundRate := ((tag.Data[0] & 0xC) >> 2)
 		mpeg4Asc := aac.MP4AudioGetConfig(tag.Data[2:])
-		logger.LOGT(mpeg4Asc)
 		if mpeg4Asc.Ext_object_type != 0 {
 			this.audioSampleRate = uint32(mpeg4Asc.Ext_sample_rate)
 		} else {

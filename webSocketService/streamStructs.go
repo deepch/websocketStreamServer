@@ -26,9 +26,9 @@ const (
 	WSC_resume     = 3
 	WSC_pause      = 4
 	WSC_seek       = 5
-	WSC_close      = 6
-	WSC_dispose    = 7
-	WSC_publish    = 8
+	WSC_close      = 7
+	WSC_stop       = 6
+	WSC_publish    = 0x10
 	WSC_onMetaData = 9
 )
 
@@ -150,7 +150,7 @@ type stClose struct {
 	Req int `json:"req"`
 }
 
-type stDispose struct {
+type stStop struct {
 	Req int `json:"req"`
 }
 

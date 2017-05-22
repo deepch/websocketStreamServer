@@ -99,7 +99,7 @@ func (this *RTMPHandler) ProcessMessage(msg *wssAPI.Msg) (err error) {
 	switch msg.Type {
 	case wssAPI.MSG_FLV_TAG:
 		tag := msg.Param1.(*flv.FlvTag)
-		this.player.appendFlvTag(tag)
+		err = this.player.appendFlvTag(tag)
 
 	case wssAPI.MSG_PLAY_START:
 		this.player.startPlay()

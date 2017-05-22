@@ -74,8 +74,14 @@ func (this *streamSource) ProcessMessage(msg *wssAPI.Msg) (err error) {
 		}
 		this.mutexSink.RLock()
 		defer this.mutexSink.RUnlock()
-		for _, v := range this.sinks {
-			v.ProcessMessage(msg)
+		for k, v := range this.sinks {
+			err = v.ProcessMessage(msg)
+			if err != nil {
+				logger.LOGE("send msg to sink failed,delete it:" + k)
+				delete(this.sinks, k)
+				v.Stop(nil)
+				err = nil //这不是源的锅
+			}
 		}
 		return
 	default:

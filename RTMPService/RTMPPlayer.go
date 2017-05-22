@@ -2,6 +2,7 @@ package RTMPService
 
 import (
 	"container/list"
+	"errors"
 	"fmt"
 	"logger"
 	"mediaTypes/flv"
@@ -106,10 +107,17 @@ func (this *rtmpPlayer) pause() {
 }
 
 func (this *rtmpPlayer) IsPlaying() bool {
-	return this.playStatus == play_idle
+	return this.playStatus == play_playing
 }
 
-func (this *rtmpPlayer) appendFlvTag(tag *flv.FlvTag) {
+func (this *rtmpPlayer) appendFlvTag(tag *flv.FlvTag) (err error) {
+	this.mutexStatus.RLock()
+	defer this.mutexStatus.RUnlock()
+	if this.playStatus != play_playing {
+		err = errors.New("not playing ,can not recv mediaData")
+		logger.LOGE(err.Error())
+		return
+	}
 	tag = tag.Copy()
 	if this.beginTime == 0 && tag.Timestamp > 0 {
 		this.beginTime = tag.Timestamp
@@ -130,6 +138,7 @@ func (this *rtmpPlayer) appendFlvTag(tag *flv.FlvTag) {
 	this.mutexCache.Lock()
 	defer this.mutexCache.Unlock()
 	this.cache.PushBack(tag)
+	return
 }
 
 func (this *rtmpPlayer) setPlayParams(path string, startTime, duration int, reset bool) bool {

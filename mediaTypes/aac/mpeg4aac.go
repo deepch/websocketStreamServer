@@ -1,7 +1,7 @@
 package aac
 
 import (
-	"log"
+	"logger"
 	"wssAPI"
 )
 
@@ -112,7 +112,7 @@ func MP4AudioGetConfig(data []byte) (asc *MP4AACAudioSpecificConfig) {
 	}
 
 	if AOT_ALS == asc.Object_type {
-		log.Println("ALS")
+		logger.LOGT("ALS")
 		bitReader.ReadBits(5)
 		als := bitReader.CopyBits(24)
 		if ((als>>16)&0xff) != 'A' || ((als>>8)&0xff) != 'L' || ((als)&0xff) != 'S' {
@@ -123,7 +123,7 @@ func MP4AudioGetConfig(data []byte) (asc *MP4AACAudioSpecificConfig) {
 	}
 
 	if asc.Ext_object_type != AOT_SBR {
-		log.Println(bitReader.BitsLeft())
+		logger.LOGT(bitReader.BitsLeft())
 		for bitReader.BitsLeft() > 15 {
 			if 0x2b7 == bitReader.CopyBits(11) {
 				bitReader.ReadBits(11)

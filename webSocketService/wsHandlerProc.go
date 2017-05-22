@@ -148,7 +148,7 @@ func (this *websocketHandler) ctrlClose(data []byte) (err error) {
 	st := &stClose{}
 	defer func() {
 		if err != nil {
-			this.sendWsStatus(this.conn, WS_status_status, NETSTREAM_FAILED, st.Req)
+			this.sendWsStatus(this.conn, WS_status_error, NETSTREAM_FAILED, st.Req)
 		} else {
 
 			this.lastCmd = WSC_close
@@ -162,12 +162,21 @@ func (this *websocketHandler) ctrlClose(data []byte) (err error) {
 	return
 }
 
-func (this *websocketHandler) ctrlDispose(data []byte) (err error) {
-	st := &stDispose{}
+func (this *websocketHandler) ctrlStop(data []byte) (err error) {
+	logger.LOGW("stop do the same as close now")
+	st := &stStop{}
 	err = json.Unmarshal(data, st)
+	defer func() {
+		if err != nil {
+			this.sendWsStatus(this.conn, WS_status_error, NETSTREAM_FAILED, st.Req)
+		} else {
+			this.lastCmd = WSC_close
+		}
+	}()
 	if err != nil {
 		return err
 	}
+	err = this.doClose()
 	return
 }
 
@@ -198,7 +207,7 @@ func (this *websocketHandler) doClose() (err error) {
 		this.stopPublish()
 	}
 	if this.hasSource {
-
+		this.delSource(this.streamName, this.sourceIdx)
 	}
 	return
 }

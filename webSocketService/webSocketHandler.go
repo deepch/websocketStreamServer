@@ -40,6 +40,7 @@ type websocketHandler struct {
 	hasSource    bool
 	mutexbSource sync.RWMutex
 	source       wssAPI.Obj
+	sourceIdx    int
 	lastCmd      int
 	mutexWs      sync.Mutex
 }
@@ -82,7 +83,7 @@ func (this *websocketHandler) ProcessMessage(msg *wssAPI.Msg) (err error) {
 	switch msg.Type {
 	case wssAPI.MSG_FLV_TAG:
 		tag := msg.Param1.(*flv.FlvTag)
-		this.appendFlvTag(tag)
+		err = this.appendFlvTag(tag)
 	case wssAPI.MSG_PLAY_START:
 		this.startPlay()
 	case wssAPI.MSG_PLAY_STOP:
@@ -94,7 +95,12 @@ func (this *websocketHandler) ProcessMessage(msg *wssAPI.Msg) (err error) {
 	return
 }
 
-func (this *websocketHandler) appendFlvTag(tag *flv.FlvTag) {
+func (this *websocketHandler) appendFlvTag(tag *flv.FlvTag) (err error) {
+	if false == this.isPlaying {
+		err = errors.New("websocket client not playing")
+		logger.LOGE(err.Error())
+		return
+	}
 	tag = tag.Copy()
 	if this.stPlay.beginTime == 0 && tag.Timestamp > 0 {
 		this.stPlay.beginTime = tag.Timestamp
@@ -115,6 +121,8 @@ func (this *websocketHandler) appendFlvTag(tag *flv.FlvTag) {
 	this.stPlay.mutexCache.Lock()
 	defer this.stPlay.mutexCache.Unlock()
 	this.stPlay.cache.PushBack(tag)
+
+	return
 }
 
 func (this *websocketHandler) processWSMessage(data []byte) (err error) {
@@ -127,7 +135,8 @@ func (this *websocketHandler) processWSMessage(data []byte) (err error) {
 	case WS_pkt_audio:
 	case WS_pkt_video:
 	case WS_pkt_control:
-		logger.LOGT(data)
+		logger.LOGD("recv control data:")
+		logger.LOGD(data)
 		return this.controlMsg(data[1:])
 	default:
 		err = errors.New(fmt.Sprintf("msg type %d not supported", msgType))
@@ -160,8 +169,8 @@ func (this *websocketHandler) controlMsg(data []byte) (err error) {
 		return this.ctrlSeek(data[3:])
 	case WSC_close:
 		return this.ctrlClose(data[3:])
-	case WSC_dispose:
-		return this.ctrlDispose(data[3:])
+	case WSC_stop:
+		return this.ctrlStop(data[3:])
 	case WSC_publish:
 		return this.ctrlPublish(data[3:])
 	case WSC_onMetaData:
@@ -255,6 +264,7 @@ func (this *playInfo) addInitPkts() {
 
 func (this *websocketHandler) startPlay() {
 	this.stPlay.reset()
+	this.isPlaying = true
 	go this.threadPlay()
 }
 
@@ -299,6 +309,8 @@ func (this *websocketHandler) threadPlay() {
 }
 
 func (this *websocketHandler) sendFmp4Slice(slice *mp4.FMP4Slice) (err error) {
+	this.mutexWs.Lock()
+	defer this.mutexWs.Unlock()
 	dataSend := make([]byte, len(slice.Data)+1)
 	dataSend[0] = byte(slice.Type)
 	copy(dataSend[1:], slice.Data)
