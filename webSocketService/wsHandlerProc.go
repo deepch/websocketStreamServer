@@ -12,7 +12,7 @@ func (this *websocketHandler) ctrlPlay(data []byte) (err error) {
 	defer func() {
 		if err != nil {
 			logger.LOGE("play failed")
-			err = SendWsStatus(this.conn, WS_status_error, NETSTREAM_PLAY_FAILED, st.Req)
+			err = this.sendWsStatus(this.conn, WS_status_error, NETSTREAM_PLAY_FAILED, st.Req)
 		} else {
 			this.lastCmd = WSC_play
 		}
@@ -76,7 +76,7 @@ func (this *websocketHandler) ctrlResume(data []byte) (err error) {
 	defer func() {
 		if err != nil {
 			logger.LOGE("resume failed do nothing")
-			SendWsStatus(this.conn, WS_status_status, NETSTREAM_FAILED, st.Req)
+			this.sendWsStatus(this.conn, WS_status_status, NETSTREAM_FAILED, st.Req)
 
 		} else {
 			this.lastCmd = WSC_play
@@ -107,7 +107,7 @@ func (this *websocketHandler) ctrlPause(data []byte) (err error) {
 	defer func() {
 		if err != nil {
 			logger.LOGE("pause failed")
-			SendWsStatus(this.conn, WS_status_status, NETSTREAM_FAILED, st.Req)
+			this.sendWsStatus(this.conn, WS_status_status, NETSTREAM_FAILED, st.Req)
 		} else {
 			this.lastCmd = WSC_pause
 		}
@@ -148,7 +148,7 @@ func (this *websocketHandler) ctrlClose(data []byte) (err error) {
 	st := &stClose{}
 	defer func() {
 		if err != nil {
-			SendWsStatus(this.conn, WS_status_status, NETSTREAM_FAILED, st.Req)
+			this.sendWsStatus(this.conn, WS_status_status, NETSTREAM_FAILED, st.Req)
 		} else {
 
 			this.lastCmd = WSC_close
@@ -191,8 +191,14 @@ func (this *websocketHandler) doClose() (err error) {
 	if this.isPlaying {
 		this.stopPlay()
 	}
+	if this.hasSink {
+		this.delSink(this.streamName, this.clientId)
+	}
 	if this.isPublish {
 		this.stopPublish()
+	}
+	if this.hasSource {
+
 	}
 	return
 }
@@ -208,7 +214,7 @@ func (this *websocketHandler) doPlay(st *stPlay) (err error) {
 		return
 	}
 
-	err = SendWsStatus(this.conn, WS_status_status, NETSTREAM_PLAY_START, st.Req)
+	err = this.sendWsStatus(this.conn, WS_status_status, NETSTREAM_PLAY_START, st.Req)
 	return
 }
 
@@ -220,14 +226,14 @@ func (this *websocketHandler) doPlay2() (err error) {
 
 func (this *websocketHandler) doResume(st *stResume) (err error) {
 	logger.LOGT("resume play start")
-	err = SendWsStatus(this.conn, WS_status_status, NETSTREAM_PLAY_START, st.Req)
+	err = this.sendWsStatus(this.conn, WS_status_status, NETSTREAM_PLAY_START, st.Req)
 	return
 }
 
 func (this *websocketHandler) doPause(st *stPause) (err error) {
 	logger.LOGT("pause do nothing")
 
-	SendWsStatus(this.conn, WS_status_status, NETSTREAM_PAUSE_NOTIFY, st.Req)
+	this.sendWsStatus(this.conn, WS_status_status, NETSTREAM_PAUSE_NOTIFY, st.Req)
 	return
 }
 

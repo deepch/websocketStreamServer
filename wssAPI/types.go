@@ -6,6 +6,7 @@ const (
 	OBJ_WebSocketServer = "WebsocketServer"
 	OBJ_BackendServer   = "BackendServer"
 	OBJ_StreamerServer  = "StreamerServer"
+	OBJ_RTSPServer      = "RTSPServer"
 )
 
 const (

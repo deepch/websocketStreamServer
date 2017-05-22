@@ -2,6 +2,7 @@ package webSocketService
 
 import (
 	"container/list"
+	"encoding/json"
 	"errors"
 	"events/eStreamerEvent"
 	"fmt"
@@ -40,6 +41,7 @@ type websocketHandler struct {
 	mutexbSource sync.RWMutex
 	source       wssAPI.Obj
 	lastCmd      int
+	mutexWs      sync.Mutex
 }
 
 type playInfo struct {
@@ -188,12 +190,14 @@ func (this *websocketHandler) addSource(streamName string) (id int, src wssAPI.O
 		logger.LOGE("add source " + streamName + " failed")
 		return
 	}
+	this.hasSource = true
 	return
 }
 
 func (this *websocketHandler) delSource(streamName string, id int) (err error) {
 	taskDelSrc := &eStreamerEvent.EveDelSource{StreamName: streamName, Id: int64(id)}
 	err = wssAPI.HandleTask(taskDelSrc)
+	this.hasSource = false
 	if err != nil {
 		logger.LOGE("del source " + streamName + " failed:" + err.Error())
 		return
@@ -208,15 +212,18 @@ func (this *websocketHandler) addSink(streamName, clientId string, sinker wssAPI
 		logger.LOGE(fmt.Sprintf("add sink %s %s failed :%s", streamName, clientId, err.Error()))
 		return
 	}
+	this.hasSink = true
 	return
 }
 
 func (this *websocketHandler) delSink(streamName, clientId string) (err error) {
 	taskDelSink := &eStreamerEvent.EveDelSink{StreamName: streamName, SinkId: clientId}
 	err = wssAPI.HandleTask(taskDelSink)
+	this.hasSink = false
 	if err != nil {
 		logger.LOGE(fmt.Sprintf("del sink %s %s failed:\n%s", streamName, clientId, err.Error()))
 	}
+	logger.LOGE("del sinker")
 	return
 }
 
@@ -272,7 +279,7 @@ func (this *websocketHandler) threadPlay() {
 			continue
 		}
 		if tag.TagType == flv.FLV_TAG_ScriptData {
-			err := SendWsControl(this.conn, WSC_onMetaData, tag.Data)
+			err := this.sendWsControl(this.conn, WSC_onMetaData, tag.Data)
 			if err != nil {
 				logger.LOGE(err.Error())
 				this.isPlaying = false
@@ -301,11 +308,41 @@ func (this *websocketHandler) sendFmp4Slice(slice *mp4.FMP4Slice) (err error) {
 func (this *websocketHandler) stopPlay() {
 	this.isPlaying = false
 	this.waitPlaying.Wait()
-	this.delSink(this.streamName, this.clientId)
 	this.stPlay.reset()
-	SendWsStatus(this.conn, WS_status_status, NETSTREAM_PLAY_STOP, 0)
+	this.sendWsStatus(this.conn, WS_status_status, NETSTREAM_PLAY_STOP, 0)
 }
 
 func (this *websocketHandler) stopPublish() {
 	logger.LOGE("stop publish not code")
+}
+
+func (this *websocketHandler) sendWsControl(conn *websocket.Conn, ctrlType int, data []byte) (err error) {
+	this.mutexWs.Lock()
+	defer this.mutexWs.Unlock()
+	dataSend := make([]byte, len(data)+4)
+	dataSend[0] = WS_pkt_control
+	dataSend[1] = byte((ctrlType >> 16) & 0xff)
+	dataSend[2] = byte((ctrlType >> 8) & 0xff)
+	dataSend[3] = byte((ctrlType >> 0) & 0xff)
+	copy(dataSend[4:], data)
+	return conn.WriteMessage(websocket.BinaryMessage, dataSend)
+}
+
+func (this *websocketHandler) sendWsStatus(conn *websocket.Conn, level, code string, req int) (err error) {
+	this.mutexWs.Lock()
+	defer this.mutexWs.Unlock()
+	st := &stResult{Level: level, Code: code, Req: req}
+	dataJson, err := json.Marshal(st)
+	if err != nil {
+		logger.LOGE(err.Error())
+		return
+	}
+	dataSend := make([]byte, len(dataJson)+4)
+	dataSend[0] = WS_pkt_control
+	dataSend[1] = 0
+	dataSend[2] = 0
+	dataSend[3] = 0
+	copy(dataSend[4:], dataJson)
+	err = conn.WriteMessage(websocket.BinaryMessage, dataSend)
+	return
 }

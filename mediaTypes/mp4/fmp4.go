@@ -14,7 +14,7 @@ import (
 	"wssAPI"
 )
 
-const save_to_file = true
+const save_to_file = false
 const (
 	video_trak = 1
 	audio_trak = 2

@@ -47,7 +47,13 @@ func (this *WebSocketService) Init(msg *wssAPI.Msg) (err error) {
 			if strings.HasPrefix(serviceConfig.PlayPath, "/") == false {
 				path = "/" + serviceConfig.PlayPath
 			}
+			serviceConfig.PlayPath = strings.TrimPrefix(serviceConfig.PlayPath, "/")
+			serviceConfig.PlayPath = strings.TrimSuffix(serviceConfig.PlayPath, "/")
+		} else {
+			err = errors.New("invalid websocket live path")
+			return
 		}
+		path = "/" + serviceConfig.PlayPath
 		http.Handle(path, http.StripPrefix(path, this))
 		err = http.ListenAndServe(strPort, nil)
 		if err != nil {
@@ -113,11 +119,13 @@ func (this *WebSocketService) handleConn(conn *websocket.Conn, req *http.Request
 	msg := &wssAPI.Msg{}
 	msg.Param1 = conn
 	handler.Init(msg)
+	defer func() {
+		handler.processWSMessage(nil)
+	}()
 	for {
 		messageType, data, err := conn.ReadMessage()
 		if err != nil {
 			logger.LOGE(err.Error())
-			handler.processWSMessage(nil)
 			return
 		}
 		switch messageType {
@@ -130,6 +138,8 @@ func (this *WebSocketService) handleConn(conn *websocket.Conn, req *http.Request
 		case websocket.BinaryMessage:
 			err = handler.processWSMessage(data)
 			if err != nil {
+				logger.LOGE(err.Error())
+				logger.LOGE("ws binary error")
 				return
 			}
 		case websocket.CloseMessage:
