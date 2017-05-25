@@ -163,3 +163,18 @@ func EmulationPrevention(src []byte) (ret []byte) {
 	copy(ret, src)
 	return ret
 }
+
+//default only one sps pps
+func GetSpsPpsFromAVC(avc []byte) (sps, pps []byte) {
+	spsSize := ((int(avc[6]) << 8) | (int(avc[7])))
+	sps = make([]byte, spsSize)
+	copy(sps, avc[8:8+spsSize])
+	cur = 8 + spsSize
+	cur++
+	ppsSize := ((int(avc[cur]) << 8) | (int(avc[cur+1])))
+	cur += 2
+	pps = make([]byte, ppsSize)
+	copy(pps, avc[cur:cur+ppsSize])
+	return
+
+}
