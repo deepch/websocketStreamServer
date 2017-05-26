@@ -216,7 +216,12 @@ func (this *websocketHandler) doPlay(st *stPlay) (err error) {
 
 	logger.LOGT("play")
 	this.clientId = wssAPI.GenerateGUID()
-	this.streamName = serviceConfig.PlayPath + "/" + st.Name
+	if len(this.app) > 0 {
+		this.streamName = this.app + "/" + st.Name
+	} else {
+		this.streamName = st.Name
+	}
+
 	err = this.addSink(this.streamName, this.clientId, this)
 	if err != nil {
 		logger.LOGE("add sink failed: " + err.Error())

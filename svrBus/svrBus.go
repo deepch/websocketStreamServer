@@ -18,11 +18,12 @@ import (
 )
 
 type busConfig struct {
-	RTMPConfigName      string `json:"RTMP"`
-	WebSocketConfigName string `json:"WebSocket"`
-	BackendConfigName   string `json:"Backend"`
-	LogPath             string `json:"LogPath"`
-	RTSPConfigName      string `json:"RTSP"`
+	RTMPConfigName          string `json:"RTMP"`
+	WebSocketConfigName     string `json:"WebSocket"`
+	BackendConfigName       string `json:"Backend"`
+	LogPath                 string `json:"LogPath"`
+	RTSPConfigName          string `json:"RTSP"`
+	StreamManagerConfigName string `json:"Streamer"`
 }
 
 type SvrBus struct {
@@ -80,7 +81,11 @@ func (this *SvrBus) loadConfig() (err error) {
 
 	if true {
 		livingSvr := &streamer.StreamerService{}
-		livingSvr.Init(nil)
+		msg := &wssAPI.Msg{}
+		if len(cfg.StreamManagerConfigName) > 0 {
+			msg.Param1 = cfg.StreamManagerConfigName
+		}
+		livingSvr.Init(msg)
 		this.mutexServices.Lock()
 		this.services[livingSvr.GetType()] = livingSvr
 		this.mutexServices.Unlock()

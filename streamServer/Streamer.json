@@ -1,0 +1,5 @@
+{
+    "upstreams": [
+        { "sinkApp": "live", "app": "teach", "protocol": "rtmp", "port": 1935, "addr": "cclive.qcus.cn" }
+    ]
+}

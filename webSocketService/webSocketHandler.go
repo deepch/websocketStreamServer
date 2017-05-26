@@ -57,6 +57,7 @@ type playInfo struct {
 
 func (this *websocketHandler) Init(msg *wssAPI.Msg) (err error) {
 	this.conn = msg.Param1.(*websocket.Conn)
+	this.app = msg.Param2.(string)
 	this.waitPlaying = new(sync.WaitGroup)
 	this.lastCmd = WSC_close
 	return

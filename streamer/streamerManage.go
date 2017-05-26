@@ -174,22 +174,22 @@ func (this *StreamerService) checkStreamAddAble(appStreamname string) bool {
 func (this *StreamerService) addUpstream(app *eLiveListCtrl.EveSetUpStreamApp) (err error) {
 	this.mutexUpStream.Lock()
 	defer this.mutexUpStream.Unlock()
-	_, exist := this.upApps[app.App]
+	_, exist := this.upApps[app.SinkApp]
 	if true == exist {
-		return errors.New("add up app:" + app.App + " existed")
+		return errors.New("add up app:" + app.SinkApp + " existed")
 	}
-	this.upApps[app.App] = app.Copy()
+	this.upApps[app.SinkApp] = app.Copy()
 	return
 }
 
 func (this *StreamerService) delUpstream(app *eLiveListCtrl.EveSetUpStreamApp) (err error) {
 	this.mutexUpStream.Lock()
 	defer this.mutexUpStream.Unlock()
-	_, exist := this.upApps[app.App]
+	_, exist := this.upApps[app.SinkApp]
 	if false == exist {
-		return errors.New("del up app: " + app.App + " not existed")
+		return errors.New("del up app: " + app.SinkApp + " not existed")
 	}
-	delete(this.upApps, app.App)
+	delete(this.upApps, app.SinkApp)
 	return
 }
 
@@ -202,4 +202,10 @@ func (this *StreamerService) badIni() {
 	//taskAddUp := eLiveListCtrl.NewSetUpStreamApp(true, "live", "rtmp", "live.hkstv.hk.lxdns.com", 1935)
 	//	taskAddUp := eLiveListCtrl.NewSetUpStreamApp(true, "live", "rtmp", "127.0.0.1", 1935)
 	//	this.HandleTask(taskAddUp)
+}
+
+func (this *StreamerService) InitUpstream(up eLiveListCtrl.EveSetUpStreamApp) {
+	logger.LOGD(up)
+	up.Add = true
+	this.HandleTask(&up)
 }

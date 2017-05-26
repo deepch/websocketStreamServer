@@ -1,6 +1,7 @@
 package streamer
 
 import (
+	"encoding/json"
 	"errors"
 	"events/eLiveListCtrl"
 	"events/eRTMPEvent"
@@ -37,7 +38,12 @@ type StreamerService struct {
 	upApps         map[string]*eLiveListCtrl.EveSetUpStreamApp
 }
 
+type StreamerConfig struct {
+	Upstreams []eLiveListCtrl.EveSetUpStreamApp `json:"upstreams"`
+}
+
 var service *StreamerService
+var serviceConfig StreamerConfig
 
 func (this *StreamerService) Init(msg *wssAPI.Msg) (err error) {
 	this.sources = make(map[string]*streamSource)
@@ -47,7 +53,27 @@ func (this *StreamerService) Init(msg *wssAPI.Msg) (err error) {
 	service = this
 	this.blackOn = false
 	this.whiteOn = false
+	if msg != nil {
+		fileName := msg.Param1.(string)
+		err = this.loadConfigFile(fileName)
+	}
 	this.badIni()
+	return
+}
+
+func (this *StreamerService) loadConfigFile(fileName string) (err error) {
+	data, err := wssAPI.ReadFileAll(fileName)
+	if err != nil {
+		return
+	}
+	err = json.Unmarshal(data, &serviceConfig)
+	if err != nil {
+		return
+	}
+
+	for _, v := range serviceConfig.Upstreams {
+		this.InitUpstream(v)
+	}
 	return
 }
 
@@ -85,11 +111,12 @@ func (this *StreamerService) HandleTask(task wssAPI.Task) (err error) {
 		}
 		this.mutexSources.Lock()
 		defer this.mutexSources.Unlock()
+
 		taskGetSrc.SrcObj, ok = this.sources[taskGetSrc.StreamName]
 		if false == ok {
 			return errors.New("not found:" + taskGetSrc.StreamName)
 		}
-		logger.LOGT(taskGetSrc.SrcObj)
+		logger.LOGT(taskGetSrc.StreamName)
 		//id zero
 		return
 	case eStreamerEvent.DelSource:
@@ -204,6 +231,7 @@ func (this *StreamerService) createSrcFromUpstream(app, streamName string, chRet
 		task.Protocol = addr.Protocol
 		task.StreamName = streamName
 		task.Src = chRet
+		task.SourceName = app + "/" + streamName
 		err := wssAPI.HandleTask(task)
 		if err != nil {
 			logger.LOGE(err.Error())
@@ -273,6 +301,7 @@ func (this *StreamerService) delSource(path string, id int64) (err error) {
 		return errors.New(path + " not found")
 	} else {
 		if id < oldSrc.createId {
+			logger.LOGW("delete with id:" + strconv.Itoa(int(id)) + " failed")
 			return errors.New(path + "is old id:" + strconv.Itoa(int(id)) + " can not delete")
 		}
 		/*remove := */ oldSrc.SetProducer(false)
@@ -297,13 +326,14 @@ func (this *StreamerService) addSink(path, sinkId string, sinker wssAPI.Obj) (er
 		if len(tmpStrings) < 2 {
 			return errors.New("add sink bad path:" + path)
 		}
-		app := tmpStrings[0]
-		streamName := tmpStrings[1]
+		app := strings.TrimSuffix(path, tmpStrings[len(tmpStrings)-1])
+		app = strings.TrimSuffix(app, "/")
+		streamName := tmpStrings[len(tmpStrings)-1]
 
 		chRet := make(chan wssAPI.Obj)
 
 		this.mutexSources.Unlock()
-
+		logger.LOGT("create upstream:" + path)
 		go this.createSrcFromUpstream(app, streamName, chRet)
 		select {
 		case srcObj, ok := <-chRet:

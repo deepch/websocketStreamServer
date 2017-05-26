@@ -65,7 +65,9 @@ func (this *RTMPPuller) Start(msg *wssAPI.Msg) (err error) {
 	//start pull
 	//connect
 	addr := this.pullParams.Address + ":" + strconv.Itoa(this.pullParams.Port)
+
 	conn, err := net.Dial("tcp", addr)
+	logger.LOGT(addr)
 	if err != nil {
 		logger.LOGE("connect failed:" + err.Error())
 		return
@@ -102,7 +104,7 @@ func (this *RTMPPuller) Stop(msg *wssAPI.Msg) (err error) {
 	//del src
 	if wssAPI.InterfaceValid(this.src) {
 		taskDelSrc := &eStreamerEvent.EveDelSource{}
-		taskDelSrc.StreamName = this.pullParams.App + "/" + this.pullParams.StreamName
+		taskDelSrc.StreamName = this.pullParams.SourceName
 		taskDelSrc.Id = this.srcId
 		err = wssAPI.HandleTask(taskDelSrc)
 		if err != nil {
@@ -184,6 +186,48 @@ func (this *RTMPPuller) ProcessMessage(msg *wssAPI.Msg) (err error) {
 
 func (this *RTMPPuller) SetParent(parent wssAPI.Obj) {
 	this.parent = parent
+}
+
+func (this *RTMPPuller) HandleControl(pkt *RTMPPacket) (err error) {
+	ctype, err := AMF0DecodeInt16(pkt.Body)
+	if err != nil {
+		return
+	}
+	switch ctype {
+	case RTMP_CTRL_streamBegin:
+		streamId, _ := AMF0DecodeInt32(pkt.Body[2:])
+		logger.LOGT(fmt.Sprintf("stream begin:%d", streamId))
+	case RTMP_CTRL_streamEof:
+		streamId, _ := AMF0DecodeInt32(pkt.Body[2:])
+		logger.LOGT(fmt.Sprintf("stream eof:%d", streamId))
+		err = errors.New("stream eof ")
+	case RTMP_CTRL_streamDry:
+		streamId, _ := AMF0DecodeInt32(pkt.Body[2:])
+		logger.LOGT(fmt.Sprintf("stream dry:%d", streamId))
+	case RTMP_CTRL_setBufferLength:
+		streamId, _ := AMF0DecodeInt32(pkt.Body[2:])
+		buffMS, _ := AMF0DecodeInt32(pkt.Body[6:])
+		this.rtmp.buffMS = uint32(buffMS)
+		this.rtmp.StreamId = uint32(streamId)
+		//logger.LOGI(fmt.Sprintf("set buffer length --streamid:%d--buffer length:%d", this.StreamId, this.buffMS))
+	case RTMP_CTRL_streamIsRecorded:
+		streamId, _ := AMF0DecodeInt32(pkt.Body[2:])
+		logger.LOGT(fmt.Sprintf("stream %d is recorded", streamId))
+	case RTMP_CTRL_pingRequest:
+		timestamp, _ := AMF0DecodeInt32(pkt.Body[2:])
+		this.rtmp.pingResponse(timestamp)
+		logger.LOGT(fmt.Sprintf("ping :%d", timestamp))
+	case RTMP_CTRL_pingResponse:
+		timestamp, _ := AMF0DecodeInt32(pkt.Body[2:])
+		logger.LOGF(fmt.Sprintf("pong :%d", timestamp))
+	case RTMP_CTRL_streamBufferEmpty:
+		//logger.LOGT(fmt.Sprintf("buffer empty"))
+	case RTMP_CTRL_streamBufferReady:
+		//logger.LOGT(fmt.Sprintf("buffer ready"))
+	default:
+		logger.LOGI(fmt.Sprintf("rtmp control type:%d not processed", ctype))
+	}
+	return
 }
 
 func (this *RTMPPuller) threadRead() {
@@ -423,7 +467,7 @@ func (this *RTMPPuller) handleRTMPResult(amfobj *AMF0Object) (err error) {
 func (this *RTMPPuller) CreatePlaySRC() {
 	if this.src == nil {
 		taskGet := &eStreamerEvent.EveGetSource{}
-		taskGet.StreamName = this.rtmp.Link.App + "/" + this.rtmp.Link.Path
+		taskGet.StreamName = this.pullParams.SourceName
 		err := wssAPI.HandleTask(taskGet)
 		if err != nil {
 			logger.LOGE(err.Error())
@@ -431,13 +475,14 @@ func (this *RTMPPuller) CreatePlaySRC() {
 
 		if wssAPI.InterfaceValid(taskGet.SrcObj) {
 			logger.LOGT("some other pulled this stream:" + taskGet.StreamName)
+			logger.LOGD(taskGet.SrcObj)
 			this.pullParams.Src <- taskGet.SrcObj
 			this.srcId = 0
 			this.reading = false
 			return
 		}
 		taskAdd := &eStreamerEvent.EveAddSource{}
-		taskAdd.StreamName = this.rtmp.Link.App + "/" + this.rtmp.Link.Path
+		taskAdd.StreamName = this.pullParams.SourceName
 		err = wssAPI.HandleTask(taskAdd)
 		if err != nil {
 			logger.LOGE(err.Error())
