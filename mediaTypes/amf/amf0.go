@@ -146,6 +146,14 @@ func (this *AMF0Encoder) EncodeInt32(num int32) (err error) {
 	return nil
 }
 
+func (this *AMF0Encoder) EncodeUint32(num uint32) (err error) {
+	err = binary.Write(this.writer, binary.BigEndian, &num)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
 func (this *AMF0Encoder) EncodeInt32LittleEndian(num int32) (err error) {
 	err = binary.Write(this.writer, binary.LittleEndian, &num)
 	if err != nil {

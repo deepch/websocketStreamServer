@@ -35,9 +35,9 @@ func (this *BitReader) ReadBits(num int) int {
 	return r
 }
 
-func (this *BitReader) Read32Bits() int {
+func (this *BitReader) Read32Bits() uint32 {
 	idx := (this.curBit >> 3)
-	var r int
+	var r uint32
 	binary.Read(bytes.NewReader(this.buf[idx:]), binary.BigEndian, &r)
 	this.curBit += 32
 

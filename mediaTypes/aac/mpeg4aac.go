@@ -163,7 +163,7 @@ func parseConfigALS(bitReader *wssAPI.BitReader, asc *MP4AACAudioSpecificConfig)
 	if bitReader.ReadBits(8) != 'A' || bitReader.ReadBits(8) != 'L' || bitReader.ReadBits(8) != 'S' || bitReader.ReadBits(8) != 0 {
 		return
 	}
-	asc.Sample_rate = bitReader.Read32Bits()
+	asc.Sample_rate = int(bitReader.Read32Bits())
 	bitReader.Read32Bits()
 	asc.Chan_config = 0
 	asc.Channels = bitReader.ReadBits(16) + 1
