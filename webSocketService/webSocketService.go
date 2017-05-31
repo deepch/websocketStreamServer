@@ -42,8 +42,10 @@ func (this *WebSocketService) Init(msg *wssAPI.Msg) (err error) {
 	go func() {
 		if true {
 			strPort := ":" + strconv.Itoa(serviceConfig.Port)
-			http.Handle("/", this)
-			err = http.ListenAndServe(strPort, nil)
+			//http.Handle("/", this)
+			mux := http.NewServeMux()
+			mux.Handle("/", this)
+			err = http.ListenAndServe(strPort, mux)
 			if err != nil {
 				logger.LOGE("start websocket failed:" + err.Error())
 			}
@@ -134,6 +136,7 @@ func (this *WebSocketService) ServeHTTP(w http.ResponseWriter, req *http.Request
 	path := req.URL.Path
 	path = strings.TrimPrefix(path, "/")
 	path = strings.TrimSuffix(path, "/")
+	logger.LOGT(path)
 	var upgrader = websocket.Upgrader{
 		ReadBufferSize:  1024,
 		WriteBufferSize: 1024,
