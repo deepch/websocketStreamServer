@@ -1,10 +1,15 @@
 package aac
 
 import (
+	"fmt"
 	"logger"
 	"wssAPI"
 )
 
+//ADTS : 本地流，需要ADTS header +aac ES
+//asc:网络流头,OBJ type就是ADTS的profile+1
+//AOT->ASC aac-main=1
+//ADTS: aac-main=0
 const (
 	AOT_NULL = iota
 	// Support?                Name
@@ -82,6 +87,7 @@ func getAudioChannels(idx int) int {
 	return arr[idx]
 }
 
+//asc
 func MP4AudioGetConfig(data []byte) (asc *MP4AACAudioSpecificConfig) {
 	bitReader := &wssAPI.BitReader{}
 	bitReader.Init(data)
@@ -154,6 +160,15 @@ func MP4AudioGetConfig(data []byte) (asc *MP4AACAudioSpecificConfig) {
 		asc.Ps = 0
 	}
 	return
+}
+
+func CreateAudioSpecificConfigForSDP(asc *MP4AACAudioSpecificConfig) string {
+	data := make([]int, 2)
+
+	data[0] = int(byte(asc.Object_type<<3) | byte(asc.Sampling_index>>1))
+	data[1] = int(byte(asc.Sampling_index<<7) | byte(asc.Chan_config<<3))
+	strConfig := fmt.Sprintf("%02x%02x", data[0], data[1])
+	return strConfig
 }
 
 func parseConfigALS(bitReader *wssAPI.BitReader, asc *MP4AACAudioSpecificConfig) {

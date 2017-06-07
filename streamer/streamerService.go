@@ -375,7 +375,7 @@ func (this *StreamerService) delSink(path, sinkId string) (err error) {
 	if false == exist {
 		return errors.New("source not found in del sink")
 	} else {
-
+		logger.LOGD("delete sinker:" + path + " " + sinkId)
 		src.mutexSink.Lock()
 		defer src.mutexSink.Unlock()
 		delete(src.sinks, sinkId)

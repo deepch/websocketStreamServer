@@ -49,55 +49,10 @@ func (this *WebSocketService) Init(msg *wssAPI.Msg) (err error) {
 			if err != nil {
 				logger.LOGE("start websocket failed:" + err.Error())
 			}
-		} else {
-			//			strPort := ":" + strconv.Itoa(serviceConfig.Port)
-			//			r := mux.NewRouter()
-			//			r.HandleFunc("/{p0}", dynamicPathsHandler)
-			//			r.HandleFunc("/{p0}/{p1}", dynamicPathsHandler)
-			//			r.HandleFunc("/{p0}/{p1}/{p2}", dynamicPathsHandler)
-			//			r.HandleFunc("/{p0}/{p1}/{p2}/{p3}", dynamicPathsHandler)
-			//			http.Handle("/", r)
-			//			err := http.ListenAndServe(strPort, nil)
-			//			if err != nil {
-			//				logger.LOGF(err.Error())
-			//			}
 		}
 	}()
 	return
 }
-
-//func dynamicPathsHandler(w http.ResponseWriter, req *http.Request) {
-//	vars := mux.Vars(req)
-//	path := ""
-//	if len(vars["p0"]) > 0 {
-//		path += vars["p0"]
-//	}
-//	if len(vars["p1"]) > 0 {
-//		path += "/" + vars["p1"]
-//	}
-//	if len(vars["p2"]) > 0 {
-//		path += "/" + vars["p2"]
-//	}
-//	if len(vars["p3"]) > 0 {
-//		path += "/" + vars["p3"]
-//	}
-//	//web socket
-//	var upgrader = websocket.Upgrader{
-//		ReadBufferSize:  1024,
-//		WriteBufferSize: 1024,
-//		CheckOrigin:     func(r *http.Request) bool { return true },
-//	}
-//	conn, err := upgrader.Upgrade(w, req, nil)
-//	if err != nil {
-//		logger.LOGE(err.Error())
-//		return
-//	}
-//	logger.LOGT(fmt.Sprintf("new websocket connect %s", conn.RemoteAddr().String()))
-//	service.handleConn(conn, req)
-//	defer func() {
-//		conn.Close()
-//	}()
-//}
 
 func (this *WebSocketService) Start(msg *wssAPI.Msg) (err error) {
 	return
@@ -151,6 +106,7 @@ func (this *WebSocketService) ServeHTTP(w http.ResponseWriter, req *http.Request
 	this.handleConn(conn, req, path)
 	defer func() {
 		conn.Close()
+		logger.LOGD("close websocket conn")
 	}()
 }
 

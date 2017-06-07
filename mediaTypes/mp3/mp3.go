@@ -13,10 +13,10 @@ type MP3Header struct {
 	bitrate     byte
 	samplerate  byte
 	channelMode byte
-
-	Bitrate    int
-	SampleRate int
-	Channel    int
+	HasCRC      byte //0 has,1 no has
+	Bitrate     int
+	SampleRate  int
+	Channel     int
 }
 
 func ParseMP3Header(data []byte) (header *MP3Header, err error) {
@@ -30,6 +30,7 @@ func ParseMP3Header(data []byte) (header *MP3Header, err error) {
 	}
 	header.version = ((data[1] & 0x18) >> 3)
 	header.layer = ((data[1] & 0x6) >> 1)
+	header.HasCRC = ((data[1] & 0x1) >> 0)
 	header.bitrate = ((data[2] & 0xf0) >> 4)
 	header.samplerate = ((data[2] & 0xc) >> 2)
 	header.channelMode = ((data[3] & 0xc0) >> 6)

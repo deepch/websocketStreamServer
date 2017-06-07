@@ -81,7 +81,7 @@ func GenerateAudioSpecificConfig(data []byte) (asc AudioSpecificConfig) {
 	return
 }
 
-//生成ADC头
+//生成ADT头
 func GenerateADTHeader(asc AudioSpecificConfig, length int) (data []byte) {
 	data = make([]byte, 7)
 	data[0] = 0xff

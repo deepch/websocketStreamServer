@@ -1,6 +1,7 @@
 package logger
 
 import (
+	"bytes"
 	"fmt"
 	"io"
 	"os"
@@ -11,11 +12,6 @@ import (
 	"time"
 )
 
-var level int
-var flag_log int
-var cout io.Writer
-var mutex sync.Mutex
-
 const (
 	LOG_LEVEL_DISABLE = -1
 	LOG_LEVEL_TRACE   = 0
@@ -24,7 +20,33 @@ const (
 	LOG_LEVEL_INFO    = 3
 	LOG_LEVEL_ERROR   = 4
 	LOG_LEVEL_FATAL   = 5
+
+	LogChanCacheSize = 10 //10 chan 来缓冲
+	logCacheSize     = 1024
 )
+
+func init() {
+	logInstance.console = true
+	logInstance.outputSeted = false
+	logInstance.buffer = new(bytes.Buffer)
+	logInstance.chans = make(chan []byte, LogChanCacheSize)
+	logInstance.flag_log = LOG_SHORT_FILE
+	go logInstance.threadLog()
+}
+
+type logInfo struct {
+	level    int
+	flag_log int
+	console  bool
+	buffer   *bytes.Buffer
+	chans    chan []byte
+	io.Writer
+	sync.Mutex             //mutex writer
+	mutexBuf    sync.Mutex //mutex buffer
+	outputSeted bool
+}
+
+var logInstance logInfo
 
 const (
 	LOG_NO_FILE    = 0x0
@@ -34,62 +56,66 @@ const (
 )
 
 func SetLogLevel(l int) {
-	level = l
+	logInstance.level = l
+}
+
+func OutputInCmd(inCmd bool) {
+	logInstance.console = inCmd
 }
 
 func SetFlags(flag int) {
-
-	flag_log = flag
+	logInstance.flag_log = flag
 }
 
 func SetOutput(w io.Writer) {
-	mutex.Lock()
-	defer mutex.Unlock()
-	cout = w
+	logInstance.Lock()
+	defer logInstance.Unlock()
+	logInstance.Writer = w
+	logInstance.outputSeted = true
 }
 
 func LOGT(v ...interface{}) {
-	if level <= LOG_LEVEL_TRACE {
-		getLogAppend(LOG_LEVEL_TRACE, v)
+	if logInstance.level <= LOG_LEVEL_TRACE {
+		logInstance.getLogAppend(LOG_LEVEL_TRACE, v)
 	}
 }
 
 func LOGW(v ...interface{}) {
-	if level <= LOG_LEVEL_WARN {
-		getLogAppend(LOG_LEVEL_WARN, v)
+	if logInstance.level <= LOG_LEVEL_WARN {
+		logInstance.getLogAppend(LOG_LEVEL_WARN, v)
 	}
 }
 
 func LOGD(v ...interface{}) {
-	if level <= LOG_LEVEL_DEBUG {
-		getLogAppend(LOG_LEVEL_DEBUG, v)
+	if logInstance.level <= LOG_LEVEL_DEBUG {
+		logInstance.getLogAppend(LOG_LEVEL_DEBUG, v)
 	}
 }
 
 func LOGI(v ...interface{}) {
-	if level <= LOG_LEVEL_INFO {
-		getLogAppend(LOG_LEVEL_INFO, v)
+	if logInstance.level <= LOG_LEVEL_INFO {
+		logInstance.getLogAppend(LOG_LEVEL_INFO, v)
 	}
 }
 
 func LOGE(v ...interface{}) {
-	if level <= LOG_LEVEL_ERROR {
-		getLogAppend(LOG_LEVEL_ERROR, v)
+	if logInstance.level <= LOG_LEVEL_ERROR {
+		logInstance.getLogAppend(LOG_LEVEL_ERROR, v)
 	}
 }
 
 func LOGF(v ...interface{}) {
-	if level <= LOG_LEVEL_FATAL {
-		getLogAppend(LOG_LEVEL_FATAL, v)
+	if logInstance.level <= LOG_LEVEL_FATAL {
+		logInstance.getLogAppend(LOG_LEVEL_FATAL, v)
 		os.Exit(1)
 	}
 }
 
-func getLogAppend(lvl int, v ...interface{}) (str string) {
+func (this *logInfo) getLogAppend(lvl int, v ...interface{}) (str string) {
 	str = ""
 	flag := 0
 	//time
-	flag = (flag_log & 0x4)
+	flag = (this.flag_log & 0x4)
 	if flag == 0x4 {
 		t := time.Now()
 		str += t.Format("[2006/01/02 15:04:05] ")
@@ -111,7 +137,7 @@ func getLogAppend(lvl int, v ...interface{}) (str string) {
 		str += "[FATAL] "
 	}
 	//location
-	flag = (flag_log & 0x3)
+	flag = (this.flag_log & 0x3)
 	if LOG_SHORT_FILE == flag || LOG_LONG_FILE == flag {
 		_, file, line, ok := runtime.Caller(2)
 		if false == ok {
@@ -138,11 +164,62 @@ func getLogAppend(lvl int, v ...interface{}) (str string) {
 		str += strbrackets
 	}
 	str += "\r\n"
-	fmt.Print(str)
-	mutex.Lock()
-	if cout != nil {
-		cout.Write([]byte(str))
+	if this.console {
+		fmt.Print(str)
 	}
-	mutex.Unlock()
+	//	this.Lock()
+	//	defer this.Unlock()
+	//	if this.Writer != nil {
+	//		this.Write([]byte(str))
+	//	}
+	this.chans <- []byte(str)
 	return
+}
+
+func (this *logInfo) threadLog() {
+	go this.threadFlush()
+	for {
+		select {
+		case data := <-this.chans:
+			if len(data) > 0 {
+				this.mutexBuf.Lock()
+				this.buffer.Write(data)
+				if logCacheSize < this.buffer.Len() {
+					dataLog := this.buffer.Bytes()
+					this.buffer.Reset()
+					this.mutexBuf.Unlock()
+					this.writeLog(dataLog)
+					continue
+				}
+				this.mutexBuf.Unlock()
+			}
+		}
+	}
+}
+
+func (this *logInfo) threadFlush() {
+	for {
+		select {
+		case <-time.After(time.Minute * 5): //定时flush一次
+			this.flush()
+		}
+	}
+}
+
+func (this *logInfo) flush() {
+	this.mutexBuf.Lock()
+	defer this.mutexBuf.Unlock()
+	if this.buffer.Len() > 0 {
+		dataLog := this.buffer.Bytes()
+		this.buffer.Reset()
+		go this.writeLog(dataLog)
+	}
+}
+
+func (this *logInfo) writeLog(dataLog []byte) {
+	this.Lock()
+	defer this.Unlock()
+	if this.outputSeted {
+		this.Write(dataLog)
+	}
 }
