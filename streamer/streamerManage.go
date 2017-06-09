@@ -5,6 +5,7 @@ import (
 	"errors"
 	"events/eLiveListCtrl"
 	"logger"
+	"math/rand"
 	"strings"
 	"wssAPI"
 )
@@ -174,23 +175,38 @@ func (this *StreamerService) checkStreamAddAble(appStreamname string) bool {
 func (this *StreamerService) addUpstream(app *eLiveListCtrl.EveSetUpStreamApp) (err error) {
 	this.mutexUpStream.Lock()
 	defer this.mutexUpStream.Unlock()
-	_, exist := this.upApps[app.SinkApp]
-	if true == exist {
-		return errors.New("add up app:" + app.SinkApp + " existed")
+	exist := false
+	if app.Weight < 1 {
+		app.Weight = 1
 	}
-	this.upApps[app.SinkApp] = app.Copy()
+	for e := this.upApps.Front(); e != nil; e = e.Next() {
+		v := e.Value.(*eLiveListCtrl.EveSetUpStreamApp)
+		if v.Equal(app) {
+			exist = true
+			break
+		}
+	}
+
+	if exist {
+		return errors.New("add up app:" + app.SinkApp + " existed")
+	} else {
+		this.upApps.PushBack(app.Copy())
+	}
+
 	return
 }
 
 func (this *StreamerService) delUpstream(app *eLiveListCtrl.EveSetUpStreamApp) (err error) {
 	this.mutexUpStream.Lock()
 	defer this.mutexUpStream.Unlock()
-	_, exist := this.upApps[app.SinkApp]
-	if false == exist {
-		return errors.New("del up app: " + app.SinkApp + " not existed")
+	for e := this.upApps.Front(); e != nil; e = e.Next() {
+		v := e.Value.(*eLiveListCtrl.EveSetUpStreamApp)
+		if v.Equal(app) {
+			this.upApps.Remove(e)
+			return
+		}
 	}
-	delete(this.upApps, app.SinkApp)
-	return
+	return errors.New("del up app: " + app.SinkApp + " not existed")
 }
 
 func (this *StreamerService) SetParent(parent wssAPI.Obj) {
@@ -208,4 +224,30 @@ func (this *StreamerService) InitUpstream(up eLiveListCtrl.EveSetUpStreamApp) {
 	logger.LOGD(up)
 	up.Add = true
 	this.HandleTask(&up)
+}
+
+func (this *StreamerService) getUpAddrAuto() (addr *eLiveListCtrl.EveSetUpStreamApp) {
+	this.mutexUpStream.RLock()
+	defer this.mutexUpStream.RUnlock()
+	size := this.upApps.Len()
+	if size > 0 {
+		totalWeight := 0
+		for e := this.upApps.Front(); e != nil; e = e.Next() {
+			v := e.Value.(*eLiveListCtrl.EveSetUpStreamApp)
+			totalWeight += v.Weight
+		}
+		if totalWeight == 0 {
+			return
+		}
+		idx := rand.Intn(totalWeight) + 1
+		cur := 0
+		for e := this.upApps.Front(); e != nil; e = e.Next() {
+			v := e.Value.(*eLiveListCtrl.EveSetUpStreamApp)
+			cur += v.Weight
+			if cur >= idx {
+				return v
+			}
+		}
+	}
+	return
 }

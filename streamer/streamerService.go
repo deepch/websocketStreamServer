@@ -1,6 +1,7 @@
 package streamer
 
 import (
+	"container/list"
 	"encoding/json"
 	"errors"
 	"events/eLiveListCtrl"
@@ -35,7 +36,7 @@ type StreamerService struct {
 	blackOn        bool
 	whiteOn        bool
 	mutexUpStream  sync.RWMutex
-	upApps         map[string]*eLiveListCtrl.EveSetUpStreamApp
+	upApps         *list.List
 }
 
 type StreamerConfig struct {
@@ -49,7 +50,7 @@ func (this *StreamerService) Init(msg *wssAPI.Msg) (err error) {
 	this.sources = make(map[string]*streamSource)
 	this.blacks = make(map[string]string)
 	this.whites = make(map[string]string)
-	this.upApps = make(map[string]*eLiveListCtrl.EveSetUpStreamApp)
+	this.upApps = list.New()
 	service = this
 	this.blackOn = false
 	this.whiteOn = false
@@ -212,15 +213,14 @@ func (this *StreamerService) ProcessMessage(msg *wssAPI.Msg) (err error) {
 }
 
 func (this *StreamerService) createSrcFromUpstream(app, streamName string, chRet chan wssAPI.Obj) {
-	this.mutexUpStream.RLock()
-	addr, exist := this.upApps[app]
-	if exist == false {
+
+	addr := this.getUpAddrAuto()
+	if nil == addr {
 		logger.LOGE(fmt.Sprintf("%s upstream not found", app))
-		this.mutexUpStream.RUnlock()
 		close(chRet)
 		return
 	}
-	this.mutexUpStream.RUnlock()
+
 	protocol := strings.ToLower(addr.Protocol)
 	switch protocol {
 	case "rtmp":
