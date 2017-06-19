@@ -91,7 +91,7 @@ func (this *WebSocketService) ServeHTTP(w http.ResponseWriter, req *http.Request
 	path := req.URL.Path
 	path = strings.TrimPrefix(path, "/")
 	path = strings.TrimSuffix(path, "/")
-	logger.LOGT(path)
+	//logger.LOGT(path)
 	var upgrader = websocket.Upgrader{
 		ReadBufferSize:  1024,
 		WriteBufferSize: 1024,
