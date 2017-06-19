@@ -41,11 +41,14 @@ func (this *BackendService) Init(msg *wssAPI.Msg) (err error) {
 	go func() {
 		strPort := ":" + strconv.Itoa(serviceConfig.Port)
 		handlers := backendHandlerInit()
+		mux := http.NewServeMux()
 		for _, item := range handlers {
 			backHandler := item.(BackendHander)
-			http.Handle(backHandler.GetRoute(), http.StripPrefix(backHandler.GetRoute(), backHandler.(http.Handler)))
+			logger.LOGD(backHandler.GetRoute())
+			//			http.Handle(backHandler.GetRoute(), http.StripPrefix(backHandler.GetRoute(), backHandler.(http.Handler)))
+			mux.Handle(backHandler.GetRoute(), http.StripPrefix(backHandler.GetRoute(), backHandler.(http.Handler)))
 		}
-		err = http.ListenAndServe(strPort, nil)
+		err = http.ListenAndServe(strPort, mux)
 		if err != nil {
 			logger.LOGE("start backend serve failed")
 		}
@@ -92,7 +95,6 @@ func (this *BackendService) SetParent(parent wssAPI.Obj) {
 
 func backendHandlerInit() []BackendHander {
 	handers := make([]BackendHander, 0)
-
 	adminLoginHandle := &AdminLoginHandler{}
 	lgData := &wssAPI.Msg{}
 	loginData := AdminLoginData{}
@@ -111,6 +113,5 @@ func backendHandlerInit() []BackendHander {
 	streamManagerHandle := &AdminStreamManageHandler{}
 	streamManagerHandle.Init(nil)
 	handers = append(handers, streamManagerHandle)
-
 	return handers
 }
