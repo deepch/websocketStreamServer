@@ -45,7 +45,7 @@ func (this *BackendService) Init(msg *wssAPI.Msg) (err error) {
 		for _, item := range handlers {
 			backHandler := item.(BackendHander)
 			logger.LOGD(backHandler.GetRoute())
-			//			http.Handle(backHandler.GetRoute(), http.StripPrefix(backHandler.GetRoute(), backHandler.(http.Handler)))
+			//http.Handle(backHandler.GetRoute(), http.StripPrefix(backHandler.GetRoute(), backHandler.(http.Handler)))
 			mux.Handle(backHandler.GetRoute(), http.StripPrefix(backHandler.GetRoute(), backHandler.(http.Handler)))
 		}
 		err = http.ListenAndServe(strPort, mux)

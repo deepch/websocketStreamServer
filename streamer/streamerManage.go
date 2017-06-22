@@ -122,8 +122,13 @@ func getLiveList() (liveList *list.List, err error) {
 	service.mutexSources.RLock()
 	defer service.mutexSources.RUnlock()
 	liveList = list.New()
-	for k, _ := range service.sources {
-		liveList.PushBack(k)
+	for k, v := range service.sources {
+		info := &eLiveListCtrl.LiveInfo{}
+		info.StreamName = k
+		v.mutexSink.RLock()
+		info.PlayerCount = len(v.sinks)
+		v.mutexSink.RUnlock()
+		liveList.PushBack(v)
 	}
 	return
 }

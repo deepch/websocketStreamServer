@@ -5,8 +5,13 @@ import (
 	"wssAPI"
 )
 
+type LiveInfo struct {
+	StreamName  string
+	PlayerCount int
+}
+
 type EveGetLiveList struct {
-	Lives *list.List
+	Lives *list.List //value =*LiveInfo
 }
 
 func (this *EveGetLiveList) Receiver() string {
