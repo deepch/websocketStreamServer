@@ -119,10 +119,10 @@ func (this *rtmpPlayer) appendFlvTag(tag *flv.FlvTag) (err error) {
 		return
 	}
 	tag = tag.Copy()
-	if this.beginTime == 0 && tag.Timestamp > 0 {
-		this.beginTime = tag.Timestamp
-	}
-	tag.Timestamp -= this.beginTime
+	//	if this.beginTime == 0 && tag.Timestamp > 0 {
+	//		this.beginTime = tag.Timestamp
+	//	}
+	//	tag.Timestamp -= this.beginTime
 	if false == this.keyFrameWrited && tag.TagType == flv.FLV_TAG_Video {
 		if this.videoHeader == nil {
 			this.videoHeader = tag
