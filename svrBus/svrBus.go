@@ -2,7 +2,7 @@ package svrBus
 
 import (
 	"RTMPService"
-	//	"RTSPService"
+	"RTSPService"
 	"backend"
 	"encoding/json"
 	"errors"
@@ -121,15 +121,15 @@ func (this *SvrBus) loadConfig() (err error) {
 		this.mutexServices.Unlock()
 	}
 
-	//	if len(cfg.RTSPConfigName) > 0 {
-	//		rtspSvr := &RTSPService.RTSPService{}
-	//		msg := &wssAPI.Msg{}
-	//		msg.Param1 = cfg.RTSPConfigName
-	//		rtspSvr.Init(msg)
-	//		this.mutexServices.Lock()
-	//		this.services[rtspSvr.GetType()] = rtspSvr
-	//		this.mutexServices.Unlock()
-	//	}
+	if len(cfg.RTSPConfigName) > 0 {
+		rtspSvr := &RTSPService.RTSPService{}
+		msg := &wssAPI.Msg{}
+		msg.Param1 = cfg.RTSPConfigName
+		rtspSvr.Init(msg)
+		this.mutexServices.Lock()
+		this.services[rtspSvr.GetType()] = rtspSvr
+		this.mutexServices.Unlock()
+	}
 	return
 }
 

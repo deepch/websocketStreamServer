@@ -5,7 +5,7 @@ import (
 )
 
 type EveSetUpStreamApp struct {
-	SinkApp  string `json:"sinkApp"`
+	Id       string `json:"Id"`
 	Add      bool
 	App      string `json:"app"`
 	Protocol string `json:"protocol"`
@@ -29,14 +29,14 @@ func NewSetUpStreamApp(add bool, app, protocol, addr, name string, port, weight 
 	out.Protocol = protocol
 	out.Addr = addr
 	out.Port = port
-	out.SinkApp = name
+	out.Id = name
 	out.Weight = weight
 	return
 }
 
 func (this *EveSetUpStreamApp) Copy() (out *EveSetUpStreamApp) {
 	out = &EveSetUpStreamApp{}
-	out.SinkApp = this.SinkApp
+	out.Id = this.Id
 	out.Add = this.Add
 	out.App = this.App
 	out.Protocol = this.Protocol
@@ -47,7 +47,7 @@ func (this *EveSetUpStreamApp) Copy() (out *EveSetUpStreamApp) {
 }
 
 func (this *EveSetUpStreamApp) Equal(rh *EveSetUpStreamApp) bool {
-	return this.SinkApp == rh.SinkApp &&
+	return this.Id == rh.Id &&
 		this.App == rh.App &&
 		this.Protocol == rh.Protocol &&
 		this.Addr == rh.Addr &&

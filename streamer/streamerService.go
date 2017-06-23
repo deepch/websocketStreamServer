@@ -5,9 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"events/eLiveListCtrl"
-	"events/eRTMPEvent"
 	"events/eStreamerEvent"
-	"fmt"
 	"logger"
 	"strconv"
 	"strings"
@@ -37,10 +35,13 @@ type StreamerService struct {
 	whiteOn        bool
 	mutexUpStream  sync.RWMutex
 	upApps         *list.List
+	upAppIdx       int
 }
 
 type StreamerConfig struct {
-	Upstreams []eLiveListCtrl.EveSetUpStreamApp `json:"upstreams"`
+	Upstreams           []eLiveListCtrl.EveSetUpStreamApp `json:"upstreams"`
+	UpstreamTimeoutSec  int                               `json:"upstreamsTimeoutSec"`
+	MediaDataTimeoutSec int                               `json:"mediaDataTimeoutSec"`
 }
 
 var service *StreamerService
@@ -65,10 +66,12 @@ func (this *StreamerService) Init(msg *wssAPI.Msg) (err error) {
 func (this *StreamerService) loadConfigFile(fileName string) (err error) {
 	data, err := wssAPI.ReadFileAll(fileName)
 	if err != nil {
+		logger.LOGE(err.Error())
 		return
 	}
 	err = json.Unmarshal(data, &serviceConfig)
 	if err != nil {
+		logger.LOGE(err.Error())
 		return
 	}
 
@@ -212,42 +215,6 @@ func (this *StreamerService) ProcessMessage(msg *wssAPI.Msg) (err error) {
 	return
 }
 
-func (this *StreamerService) createSrcFromUpstream(app, streamName string, chRet chan wssAPI.Obj) {
-
-	addr := this.getUpAddrAuto()
-	if nil == addr {
-		logger.LOGE(fmt.Sprintf("%s upstream not found", app))
-		close(chRet)
-		return
-	}
-
-	protocol := strings.ToLower(addr.Protocol)
-	switch protocol {
-	case "rtmp":
-		task := &eRTMPEvent.EvePullRTMPStream{}
-		task.App = addr.App
-		task.Address = addr.Addr
-		task.Port = addr.Port
-		task.Protocol = addr.Protocol
-		task.StreamName = streamName
-		task.Src = chRet
-		task.SourceName = app + "/" + streamName
-		err := wssAPI.HandleTask(task)
-		if err != nil {
-			logger.LOGE(err.Error())
-		}
-		return
-	default:
-		logger.LOGE(fmt.Sprintf("%s not support now...", addr.Protocol))
-		return
-	}
-	return
-}
-
-func (this *StreamerService) checkUpStreamCreated(path string) {
-	//usr chan
-}
-
 //src control sink
 //add source:not start src,start sinks
 //del source:not stop src,stop sinks
@@ -317,6 +284,7 @@ func (this *StreamerService) delSource(path string, id int64) (err error) {
 
 //add sink:auto start sink by src
 //del sink:not stop sink,stop by sink itself
+//将add sink 改成异步
 func (this *StreamerService) addSink(path, sinkId string, sinker wssAPI.Obj) (err error) {
 	this.mutexSources.Lock()
 	defer this.mutexSources.Unlock()
@@ -334,7 +302,7 @@ func (this *StreamerService) addSink(path, sinkId string, sinker wssAPI.Obj) (er
 
 		this.mutexSources.Unlock()
 		logger.LOGT("create upstream:" + path)
-		go this.createSrcFromUpstream(app, streamName, chRet)
+		go this.pullStream(app, streamName, chRet)
 		select {
 		case srcObj, ok := <-chRet:
 			this.mutexSources.Lock()
@@ -353,7 +321,7 @@ func (this *StreamerService) addSink(path, sinkId string, sinker wssAPI.Obj) (er
 			}
 			logger.LOGT("get src from upstream")
 			return src.AddSink(sinkId, sinker)
-		case <-time.After(1 * time.Minute):
+		case <-time.After(time.Duration(serviceConfig.UpstreamTimeoutSec) * time.Second):
 			close(chRet)
 			this.mutexSources.Lock()
 			logger.LOGT("re lock for defer")

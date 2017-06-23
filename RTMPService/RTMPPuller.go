@@ -23,6 +23,7 @@ type RTMPPuller struct {
 	waitRead   *sync.WaitGroup
 	reading    bool
 	srcId      int64
+	chValid    bool
 }
 
 func PullRTMPLive(task *eRTMPEvent.EvePullRTMPStream) {
@@ -37,7 +38,16 @@ func (this *RTMPPuller) Init(msg *wssAPI.Msg) (err error) {
 	this.pullParams = msg.Param1.(*eRTMPEvent.EvePullRTMPStream).Copy()
 	this.initRTMPLink()
 	this.waitRead = new(sync.WaitGroup)
+	this.chValid = true
 	return
+}
+
+func (this *RTMPPuller) closeCh() {
+	if this.chValid {
+		this.chValid = false
+		logger.LOGD("close ch")
+		close(this.pullParams.Src)
+	}
 }
 
 func (this *RTMPPuller) initRTMPLink() {
@@ -55,7 +65,7 @@ func (this *RTMPPuller) Start(msg *wssAPI.Msg) (err error) {
 	defer func() {
 		if err != nil {
 			logger.LOGE("start failed")
-			close(this.pullParams.Src)
+			this.closeCh()
 			if nil != this.rtmp.Conn {
 				this.rtmp.Conn.Close()
 				this.rtmp.Conn = nil
@@ -236,6 +246,7 @@ func (this *RTMPPuller) threadRead() {
 	defer func() {
 		this.waitRead.Done()
 		this.Stop(nil)
+		this.closeCh()
 		logger.LOGT("stop read,close conn")
 	}()
 	for this.reading {
@@ -476,7 +487,9 @@ func (this *RTMPPuller) CreatePlaySRC() {
 		if wssAPI.InterfaceValid(taskGet.SrcObj) {
 			logger.LOGT("some other pulled this stream:" + taskGet.StreamName)
 			logger.LOGD(taskGet.SrcObj)
-			this.pullParams.Src <- taskGet.SrcObj
+			if this.chValid {
+				this.pullParams.Src <- taskGet.SrcObj
+			}
 			this.srcId = 0
 			this.reading = false
 			return
@@ -489,7 +502,7 @@ func (this *RTMPPuller) CreatePlaySRC() {
 			return
 		}
 		if wssAPI.InterfaceIsNil(taskAdd.SrcObj) {
-			close(this.pullParams.Src)
+			this.closeCh()
 			this.reading = false
 			return
 		}

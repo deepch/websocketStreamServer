@@ -149,7 +149,6 @@ func (this *RTMPHandler) sourceInvalid() {
 
 func (this *RTMPHandler) HandleRTMPPacket(packet *RTMPPacket) (err error) {
 	if nil == packet {
-		//this.updateStatus(rtmp_status_idle)
 		this.Stop(nil)
 		return
 	}

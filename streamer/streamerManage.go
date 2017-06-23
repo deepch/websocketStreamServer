@@ -4,9 +4,12 @@ import (
 	"container/list"
 	"errors"
 	"events/eLiveListCtrl"
+	"events/eRTMPEvent"
+	"fmt"
 	"logger"
 	"math/rand"
 	"strings"
+	"time"
 	"wssAPI"
 )
 
@@ -184,6 +187,7 @@ func (this *StreamerService) addUpstream(app *eLiveListCtrl.EveSetUpStreamApp) (
 	if app.Weight < 1 {
 		app.Weight = 1
 	}
+	logger.LOGD(app.Id)
 	for e := this.upApps.Front(); e != nil; e = e.Next() {
 		v := e.Value.(*eLiveListCtrl.EveSetUpStreamApp)
 		if v.Equal(app) {
@@ -193,7 +197,7 @@ func (this *StreamerService) addUpstream(app *eLiveListCtrl.EveSetUpStreamApp) (
 	}
 
 	if exist {
-		return errors.New("add up app:" + app.SinkApp + " existed")
+		return errors.New("add up app:" + app.Id + " existed")
 	} else {
 		this.upApps.PushBack(app.Copy())
 	}
@@ -211,7 +215,7 @@ func (this *StreamerService) delUpstream(app *eLiveListCtrl.EveSetUpStreamApp) (
 			return
 		}
 	}
-	return errors.New("del up app: " + app.SinkApp + " not existed")
+	return errors.New("del up app: " + app.Id + " not existed")
 }
 
 func (this *StreamerService) SetParent(parent wssAPI.Obj) {
@@ -226,7 +230,7 @@ func (this *StreamerService) badIni() {
 }
 
 func (this *StreamerService) InitUpstream(up eLiveListCtrl.EveSetUpStreamApp) {
-	logger.LOGD(up)
+
 	up.Add = true
 	this.HandleTask(&up)
 }
@@ -236,6 +240,7 @@ func (this *StreamerService) getUpAddrAuto() (addr *eLiveListCtrl.EveSetUpStream
 	defer this.mutexUpStream.RUnlock()
 	size := this.upApps.Len()
 	if size > 0 {
+		logger.LOGD(size)
 		totalWeight := 0
 		for e := this.upApps.Front(); e != nil; e = e.Next() {
 			v := e.Value.(*eLiveListCtrl.EveSetUpStreamApp)
@@ -255,4 +260,81 @@ func (this *StreamerService) getUpAddrAuto() (addr *eLiveListCtrl.EveSetUpStream
 		}
 	}
 	return
+}
+
+func (this *StreamerService) getUpAddrCopy() (addrs *list.List) {
+	this.mutexUpStream.RLock()
+	defer this.mutexUpStream.RUnlock()
+	addrs = list.New()
+	for e := this.upApps.Front(); e != nil; e = e.Next() {
+		addrs.PushBack(e)
+	}
+	return
+}
+
+func (this *StreamerService) pullStreamExec(app, streamName string, addr *eLiveListCtrl.EveSetUpStreamApp) (src wssAPI.Obj) {
+	ok := false
+	chRet := make(chan wssAPI.Obj) //这个ch由任务执行者来关闭
+	protocol := strings.ToLower(addr.Protocol)
+	switch protocol {
+	case "rtmp":
+		task := &eRTMPEvent.EvePullRTMPStream{}
+		task.App = addr.App
+		task.Address = addr.Addr
+		task.Port = addr.Port
+		task.Protocol = addr.Protocol
+		task.StreamName = streamName
+		task.Src = chRet
+		task.SourceName = app + "/" + streamName
+		err := wssAPI.HandleTask(task)
+		if err != nil {
+			logger.LOGE(err.Error())
+			return
+		}
+	default:
+		close(chRet)
+		logger.LOGE(fmt.Sprintf("%s not support now...", addr.Protocol))
+		return
+	}
+	//wait for success or timeout
+	select {
+	case src, ok = <-chRet:
+		if ok {
+			logger.LOGD("pull up stream true")
+		} else {
+			logger.LOGD("pull up stream false")
+		}
+		return
+	case <-time.After(time.Duration(serviceConfig.UpstreamTimeoutSec) * time.Second):
+		logger.LOGD("pull up stream timeout")
+		return
+	}
+	return
+}
+
+func (this *StreamerService) pullStream(app, streamName string, chRet chan wssAPI.Obj) {
+	//	var src wssAPI.Obj
+	//	ok := false
+	//	defer func() {
+	//		if ok == false || wssAPI.InterfaceIsNil(src) {
+	//			close(chRet)
+	//			logger.LOGE("pull upstream failed")
+	//		}
+	//	}()
+	//	chAuto := make(chan wssAPI.Obj)
+	//	defer close(chAuto)
+	//	go this.pullStreamAuto(app, streamName, chAuto)
+	//	select {
+	//	case srcObj, ok = <-chAuto:
+	//		if false == ok {
+	//			logger.LOGD("pull auto stream failed:false")
+	//		}
+	//		if wssAPI.InterfaceIsNil(src) {
+	//			logger.LOGD("")
+	//		}
+
+	//	case <-time.After(time.Duration(serviceConfig.UpstreamTimeoutSec) * time.Second):
+	//		logger.LOGW("pull auto stream failed:time out")
+	//		return
+	//	}
 }

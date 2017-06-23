@@ -1,6 +1,7 @@
 {
     "upstreams": [
-        { "sinkApp": "live", "app": "teach", "protocol": "rtmp", "port": 1935, "addr": "cclive.qcus.cn", "weight": 10 },
-        { "sinkApp": "live", "app": "teach", "protocol": "rtmp", "port": 1935, "addr": "localhost", "weight": 1 }
-    ]
+        { "Id": "hk", "app": "live", "protocol": "rtmp", "port": 1935, "addr": "live.hkstv.hk.lxdns.com", "weight": 100 }
+    ],
+    "upstreamsTimeoutSec": 60,
+    "mediaDataTimeoutSec": 30
 }

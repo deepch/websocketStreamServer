@@ -18,18 +18,6 @@ func initLogger() {
 
 func startServers() {
 	svrBus.Start()
-	//	bus := &svrBus.SvrBus{}
-	//	err := bus.Init(nil)
-	//	if err != nil {
-	//		logger.LOGF(err.Error())
-	//	}
-	//	err = bus.Start(nil)
-	//	if err != nil {
-
-	//		logger.LOGE(err.Error())
-
-	//		return
-	//	}
 
 	ch := make(chan int)
 	<-ch
