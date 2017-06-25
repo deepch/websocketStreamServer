@@ -13,6 +13,7 @@ type EveAddSink struct {
 	StreamName string     //in
 	SinkId     string     //in
 	Sinker     wssAPI.Obj //in
+	Added      bool       //out
 }
 
 func (this *EveAddSink) Receiver() string {

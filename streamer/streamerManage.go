@@ -240,13 +240,13 @@ func (this *StreamerService) getUpAddrAuto() (addr *eLiveListCtrl.EveSetUpStream
 	defer this.mutexUpStream.RUnlock()
 	size := this.upApps.Len()
 	if size > 0 {
-		logger.LOGD(size)
 		totalWeight := 0
 		for e := this.upApps.Front(); e != nil; e = e.Next() {
 			v := e.Value.(*eLiveListCtrl.EveSetUpStreamApp)
 			totalWeight += v.Weight
 		}
 		if totalWeight == 0 {
+			logger.LOGF(totalWeight)
 			return
 		}
 		idx := rand.Intn(totalWeight) + 1
@@ -272,8 +272,7 @@ func (this *StreamerService) getUpAddrCopy() (addrs *list.List) {
 	return
 }
 
-func (this *StreamerService) pullStreamExec(app, streamName string, addr *eLiveListCtrl.EveSetUpStreamApp) (src wssAPI.Obj) {
-	ok := false
+func (this *StreamerService) pullStreamExec(app, streamName string, addr *eLiveListCtrl.EveSetUpStreamApp) (src wssAPI.Obj, ok bool) {
 	chRet := make(chan wssAPI.Obj) //这个ch由任务执行者来关闭
 	protocol := strings.ToLower(addr.Protocol)
 	switch protocol {
@@ -312,29 +311,43 @@ func (this *StreamerService) pullStreamExec(app, streamName string, addr *eLiveL
 	return
 }
 
-func (this *StreamerService) pullStream(app, streamName string, chRet chan wssAPI.Obj) {
-	//	var src wssAPI.Obj
-	//	ok := false
-	//	defer func() {
-	//		if ok == false || wssAPI.InterfaceIsNil(src) {
-	//			close(chRet)
-	//			logger.LOGE("pull upstream failed")
-	//		}
-	//	}()
-	//	chAuto := make(chan wssAPI.Obj)
-	//	defer close(chAuto)
-	//	go this.pullStreamAuto(app, streamName, chAuto)
-	//	select {
-	//	case srcObj, ok = <-chAuto:
-	//		if false == ok {
-	//			logger.LOGD("pull auto stream failed:false")
-	//		}
-	//		if wssAPI.InterfaceIsNil(src) {
-	//			logger.LOGD("")
-	//		}
+func (this *StreamerService) pullStream(app, streamName, sinkId string, sinker wssAPI.Obj) {
+	//按权重随机一个
+	addr := this.getUpAddrAuto()
+	if nil == addr {
+		logger.LOGE("upstream not found")
+		return
+	}
+	src, ok := this.pullStreamExec(app, streamName, addr)
+	defer func() {
+		if true == ok && wssAPI.InterfaceValid(src) {
+			source, ok := src.(*streamSource)
+			if true == ok {
 
-	//	case <-time.After(time.Duration(serviceConfig.UpstreamTimeoutSec) * time.Second):
-	//		logger.LOGW("pull auto stream failed:time out")
-	//		return
-	//	}
+				source.AddSink(sinkId, sinker)
+			}
+		}
+
+	}()
+	if true == ok && wssAPI.InterfaceValid(src) {
+		msg := &wssAPI.Msg{}
+		msg.Type = wssAPI.MSG_GetSource_NOTIFY
+		sinker.ProcessMessage(msg)
+		return
+	}
+	//按顺序进行
+	addrs := this.getUpAddrCopy()
+	for e := addrs.Front(); e != nil; e = e.Next() {
+		addr, ok := e.Value.(*eLiveListCtrl.EveSetUpStreamApp)
+		if false == ok || nil == addr {
+			continue
+		}
+		src, ok = this.pullStreamExec(app, streamName, addr)
+		if true == ok && src != nil && wssAPI.InterfaceValid(src) {
+			msg := &wssAPI.Msg{}
+			msg.Type = wssAPI.MSG_GetSource_NOTIFY
+			sinker.ProcessMessage(msg)
+			return
+		}
+	}
 }

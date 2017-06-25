@@ -10,7 +10,6 @@ import (
 	"strconv"
 	"strings"
 	"sync"
-	"time"
 	"wssAPI"
 )
 
@@ -136,7 +135,7 @@ func (this *StreamerService) HandleTask(task wssAPI.Task) (err error) {
 		if false == ok {
 			return errors.New("invalid param")
 		}
-		err = this.addSink(taskAddSink.StreamName, taskAddSink.SinkId, taskAddSink.Sinker)
+		err = this.addSink(taskAddSink)
 		return
 	case eStreamerEvent.DelSink:
 		taskDelSink, ok := task.(*eStreamerEvent.EveDelSink)
@@ -285,9 +284,13 @@ func (this *StreamerService) delSource(path string, id int64) (err error) {
 //add sink:auto start sink by src
 //del sink:not stop sink,stop by sink itself
 //将add sink 改成异步
-func (this *StreamerService) addSink(path, sinkId string, sinker wssAPI.Obj) (err error) {
+func (this *StreamerService) addSink(sinkInfo *eStreamerEvent.EveAddSink) (err error) {
 	this.mutexSources.Lock()
 	defer this.mutexSources.Unlock()
+	path := sinkInfo.StreamName
+	sinkId := sinkInfo.SinkId
+	sinker := sinkInfo.Sinker
+	sinkInfo.Added = false
 	src, exist := this.sources[path]
 	if false == exist {
 		tmpStrings := strings.Split(path, "/")
@@ -297,40 +300,13 @@ func (this *StreamerService) addSink(path, sinkId string, sinker wssAPI.Obj) (er
 		app := strings.TrimSuffix(path, tmpStrings[len(tmpStrings)-1])
 		app = strings.TrimSuffix(app, "/")
 		streamName := tmpStrings[len(tmpStrings)-1]
-
-		chRet := make(chan wssAPI.Obj)
-
-		this.mutexSources.Unlock()
 		logger.LOGT("create upstream:" + path)
-		go this.pullStream(app, streamName, chRet)
-		select {
-		case srcObj, ok := <-chRet:
-			this.mutexSources.Lock()
-			logger.LOGT("re lock for defer")
-			if false == ok {
-				return errors.New("chan closed")
-			}
-			//close chan
-			close(chRet)
-			if wssAPI.InterfaceIsNil(srcObj) {
-				return errors.New("source not found in add sink")
-			}
-			src, ok = srcObj.(*streamSource)
-			if false == ok {
-				return errors.New("bad source")
-			}
-			logger.LOGT("get src from upstream")
-			return src.AddSink(sinkId, sinker)
-		case <-time.After(time.Duration(serviceConfig.UpstreamTimeoutSec) * time.Second):
-			close(chRet)
-			this.mutexSources.Lock()
-			logger.LOGT("re lock for defer")
-			logger.LOGE("add sink timeout")
-			return errors.New("add sink timeout")
-		}
-		return errors.New("add sink failed")
+		go this.pullStream(app, streamName, sinkId, sinkInfo.Sinker)
 	} else {
-		return src.AddSink(sinkId, sinker)
+		err = src.AddSink(sinkId, sinker)
+		if err == nil {
+			sinkInfo.Added = true
+		}
 	}
 	return
 }

@@ -82,6 +82,8 @@ func (this *websocketHandler) HandleTask(task wssAPI.Task) (err error) {
 
 func (this *websocketHandler) ProcessMessage(msg *wssAPI.Msg) (err error) {
 	switch msg.Type {
+	case wssAPI.MSG_GetSource_NOTIFY:
+		this.hasSink = true
 	case wssAPI.MSG_FLV_TAG:
 		tag := msg.Param1.(*flv.FlvTag)
 		err = this.appendFlvTag(tag)
@@ -223,7 +225,7 @@ func (this *websocketHandler) addSink(streamName, clientId string, sinker wssAPI
 		logger.LOGE(fmt.Sprintf("add sink %s %s failed :%s", streamName, clientId, err.Error()))
 		return
 	}
-	this.hasSink = true
+	this.hasSink = taskAddsink.Added
 	return
 }
 

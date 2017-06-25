@@ -97,6 +97,8 @@ func (this *RTMPHandler) ProcessMessage(msg *wssAPI.Msg) (err error) {
 		return errors.New("nil message")
 	}
 	switch msg.Type {
+	case wssAPI.MSG_GetSource_NOTIFY:
+		this.srcAdded = true
 	case wssAPI.MSG_FLV_TAG:
 		tag := msg.Param1.(*flv.FlvTag)
 		err = this.player.appendFlvTag(tag)
@@ -391,7 +393,7 @@ func (this *RTMPHandler) handleInvoke(packet *RTMPPacket) (err error) {
 				"paly failed", this.streamName, 0, RTMP_channel_Invoke)
 			return nil
 		}
-		this.sinkAdded = true
+		this.sinkAdded = taskAddSink.Added
 	case "_error":
 		amfobj.Dump()
 	case "closeStream":
