@@ -1,6 +1,7 @@
 package RTMPService
 
 import (
+	"container/list"
 	"errors"
 	"events/eRTMPEvent"
 	"events/eStreamerEvent"
@@ -24,6 +25,7 @@ type RTMPPuller struct {
 	reading    bool
 	srcId      int64
 	chValid    bool
+	metaDatas  *list.List
 }
 
 func PullRTMPLive(task *eRTMPEvent.EvePullRTMPStream) {
@@ -39,6 +41,7 @@ func (this *RTMPPuller) Init(msg *wssAPI.Msg) (err error) {
 	this.initRTMPLink()
 	this.waitRead = new(sync.WaitGroup)
 	this.chValid = true
+	this.metaDatas = list.New()
 	return
 }
 
@@ -280,7 +283,7 @@ func (this *RTMPPuller) threadRead() {
 		case RTMP_PACKET_TYPE_VIDEO:
 			err = this.sendFlvToSrc(packet)
 		case RTMP_PACKET_TYPE_INFO:
-			err = this.sendFlvToSrc(packet)
+			this.metaDatas.PushBack(packet.Copy())
 		case RTMP_PACKET_TYPE_FLASH_VIDEO:
 			err = this.processAggregation(packet)
 		default:
@@ -293,12 +296,26 @@ func (this *RTMPPuller) threadRead() {
 }
 
 func (this *RTMPPuller) sendFlvToSrc(pkt *RTMPPacket) (err error) {
+	if wssAPI.InterfaceIsNil(this.src) && pkt.MessageTypeId != flv.FLV_TAG_ScriptData {
+		this.CreatePlaySRC()
+	}
 	if wssAPI.InterfaceValid(this.src) {
+		if this.metaDatas.Len() > 0 {
+			for e := this.metaDatas.Front(); e != nil; e = e.Next() {
+				metaDataPkt := e.Value.(*RTMPPacket)
+				msg := &wssAPI.Msg{Type: wssAPI.MSG_FLV_TAG, Param1: metaDataPkt}
+				err = this.src.ProcessMessage(msg)
+				if err != nil {
+					logger.LOGE(err.Error())
+					this.Stop(nil)
+				}
+			}
+			this.metaDatas = list.New()
+		}
 		msg := &wssAPI.Msg{}
 		msg.Type = wssAPI.MSG_FLV_TAG
 		msg.Param1 = pkt.ToFLVTag()
 		err = this.src.ProcessMessage(msg)
-		//		logger.LOGT(pkt.TimeStamp)
 		if err != nil {
 			logger.LOGE(err.Error())
 			this.Stop(nil)
@@ -312,13 +329,22 @@ func (this *RTMPPuller) sendFlvToSrc(pkt *RTMPPacket) (err error) {
 
 func (this *RTMPPuller) processAggregation(pkt *RTMPPacket) (err error) {
 	cur := 0
+	firstAggTime := uint32(0xffffffff)
 	for cur < len(pkt.Body) {
 		flvPkt := &flv.FlvTag{}
 		flvPkt.StreamID = 0
-		flvPkt.Timestamp = pkt.TimeStamp
+		flvPkt.Timestamp = 0
 		flvPkt.TagType = pkt.Body[cur]
 		pktLength, _ := AMF0DecodeInt24(pkt.Body[cur+1 : cur+4])
+		TimeStamp, _ := AMF0DecodeInt24(pkt.Body[cur+4 : cur+7])
+		TimeStampExtended := uint32(pkt.Body[7])
+		TimeStamp |= (TimeStampExtended << 24)
+		if 0xffffffff == firstAggTime {
+			firstAggTime = TimeStamp
+		}
+		flvPkt.Timestamp = pkt.TimeStamp + TimeStamp - firstAggTime
 		flvPkt.Data = make([]byte, pktLength)
+
 		copy(flvPkt.Data, pkt.Body[cur+11:cur+11+int(pktLength)])
 		cur += 11 + int(pktLength) + 4
 		msg := &wssAPI.Msg{}
@@ -427,7 +453,8 @@ func (this *RTMPPuller) handleInvoke(pkt *RTMPPacket) (err error) {
 		}
 		//start play
 		if code == "NetStream.Play.Start" || code == "NetStream.Play.PublishNotify" {
-			this.CreatePlaySRC()
+			//this.CreatePlaySRC()
+			logger.LOGW("start by media data")
 		}
 	default:
 		logger.LOGW(fmt.Sprintf("method %s not processed", methodProp.Value.StrValue))

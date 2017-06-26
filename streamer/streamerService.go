@@ -268,6 +268,7 @@ func (this *StreamerService) delSource(path string, id int64) (err error) {
 	} else {
 		if id < oldSrc.createId {
 			logger.LOGW("delete with id:" + strconv.Itoa(int(id)) + " failed")
+			logger.LOGD(oldSrc.createId)
 			return errors.New(path + "is old id:" + strconv.Itoa(int(id)) + " can not delete")
 		}
 		/*remove := */ oldSrc.SetProducer(false)

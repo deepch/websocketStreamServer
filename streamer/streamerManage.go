@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"logger"
 	"math/rand"
+	"reflect"
 	"strings"
 	"time"
 	"wssAPI"
@@ -267,7 +268,7 @@ func (this *StreamerService) getUpAddrCopy() (addrs *list.List) {
 	defer this.mutexUpStream.RUnlock()
 	addrs = list.New()
 	for e := this.upApps.Front(); e != nil; e = e.Next() {
-		addrs.PushBack(e)
+		addrs.PushBack(e.Value.(*eLiveListCtrl.EveSetUpStreamApp))
 	}
 	return
 }
@@ -323,9 +324,14 @@ func (this *StreamerService) pullStream(app, streamName, sinkId string, sinker w
 		if true == ok && wssAPI.InterfaceValid(src) {
 			source, ok := src.(*streamSource)
 			if true == ok {
-
+				logger.LOGD("add sink")
 				source.AddSink(sinkId, sinker)
+			} else {
+				logger.LOGE("add sink failed", source, ok)
 			}
+		} else {
+			logger.LOGE("bad add", ok, src)
+			logger.LOGD(reflect.TypeOf(src))
 		}
 
 	}()
@@ -338,8 +344,10 @@ func (this *StreamerService) pullStream(app, streamName, sinkId string, sinker w
 	//按顺序进行
 	addrs := this.getUpAddrCopy()
 	for e := addrs.Front(); e != nil; e = e.Next() {
-		addr, ok := e.Value.(*eLiveListCtrl.EveSetUpStreamApp)
+		var addr *eLiveListCtrl.EveSetUpStreamApp
+		addr, ok = e.Value.(*eLiveListCtrl.EveSetUpStreamApp)
 		if false == ok || nil == addr {
+			logger.LOGE("invalid addr")
 			continue
 		}
 		src, ok = this.pullStreamExec(app, streamName, addr)
