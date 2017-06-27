@@ -175,7 +175,7 @@ func (this *rtmpPlayer) threadPlay() {
 		this.mutexCache.Lock()
 		if this.cache == nil || this.cache.Len() == 0 {
 			this.mutexCache.Unlock()
-			time.Sleep(30 * time.Millisecond)
+			time.Sleep(10 * time.Millisecond)
 			continue
 		}
 		if this.cache.Len() > serviceConfig.CacheCount {

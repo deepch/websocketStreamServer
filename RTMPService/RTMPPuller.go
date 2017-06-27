@@ -3,6 +3,7 @@ package RTMPService
 import (
 	"container/list"
 	"errors"
+	"events/eLiveListCtrl"
 	"events/eRTMPEvent"
 	"events/eStreamerEvent"
 	"fmt"
@@ -189,11 +190,19 @@ func (this *RTMPPuller) GetType() string {
 	return rtmpTypePuller
 }
 
-func (this *RTMPPuller) HandleTask(task *wssAPI.Task) (err error) {
+func (this *RTMPPuller) HandleTask(task wssAPI.Task) (err error) {
 	return
 }
 
 func (this *RTMPPuller) ProcessMessage(msg *wssAPI.Msg) (err error) {
+	switch msg.Type {
+	case wssAPI.MSG_SourceClosed_Force:
+		logger.LOGT("rtmp puller data sink closed")
+		this.src = nil
+		this.reading = false
+	default:
+		logger.LOGE(msg.Type + " not processed")
+	}
 	return
 }
 
@@ -297,12 +306,13 @@ func (this *RTMPPuller) threadRead() {
 
 func (this *RTMPPuller) sendFlvToSrc(pkt *RTMPPacket) (err error) {
 	if wssAPI.InterfaceIsNil(this.src) && pkt.MessageTypeId != flv.FLV_TAG_ScriptData {
+
 		this.CreatePlaySRC()
 	}
 	if wssAPI.InterfaceValid(this.src) {
 		if this.metaDatas.Len() > 0 {
 			for e := this.metaDatas.Front(); e != nil; e = e.Next() {
-				metaDataPkt := e.Value.(*RTMPPacket)
+				metaDataPkt := e.Value.(*RTMPPacket).ToFLVTag()
 				msg := &wssAPI.Msg{Type: wssAPI.MSG_FLV_TAG, Param1: metaDataPkt}
 				err = this.src.ProcessMessage(msg)
 				if err != nil {
@@ -510,10 +520,11 @@ func (this *RTMPPuller) CreatePlaySRC() {
 		if err != nil {
 			logger.LOGE(err.Error())
 		}
-
-		if wssAPI.InterfaceValid(taskGet.SrcObj) {
-			logger.LOGT("some other pulled this stream:" + taskGet.StreamName)
-			logger.LOGD(taskGet.SrcObj)
+		logger.LOGD(this.pullParams.Address)
+		if wssAPI.InterfaceValid(taskGet.SrcObj) && taskGet.HasProducer {
+			//已经被其他人抢先了
+			logger.LOGD("some other pulled this stream:"+taskGet.StreamName, this.pullParams.Address)
+			logger.LOGD(taskGet.HasProducer)
 			if this.chValid {
 				this.pullParams.Src <- taskGet.SrcObj
 			}
@@ -522,6 +533,7 @@ func (this *RTMPPuller) CreatePlaySRC() {
 			return
 		}
 		taskAdd := &eStreamerEvent.EveAddSource{}
+		taskAdd.Producer = this
 		taskAdd.StreamName = this.pullParams.SourceName
 		err = wssAPI.HandleTask(taskAdd)
 		if err != nil {
@@ -536,7 +548,26 @@ func (this *RTMPPuller) CreatePlaySRC() {
 		this.src = taskAdd.SrcObj
 		this.srcId = taskAdd.Id
 		this.pullParams.Src <- this.src
+		go this.checkPlayerCounts()
 		logger.LOGT("add src ok..")
 		return
+	}
+}
+
+func (this *RTMPPuller) checkPlayerCounts() {
+	for this.reading && wssAPI.InterfaceValid(this.src) {
+		time.Sleep(time.Duration(2) * time.Minute)
+		eve := &eLiveListCtrl.EveGetLivePlayerCount{LiveName: this.pullParams.SourceName}
+
+		err := wssAPI.HandleTask(eve)
+		if err != nil {
+			logger.LOGD(err.Error())
+			continue
+		}
+		if 1 > eve.Count {
+			logger.LOGI("no player for this puller ,close itself")
+			this.reading = false
+			return
+		}
 	}
 }

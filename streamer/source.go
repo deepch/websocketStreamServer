@@ -21,6 +21,7 @@ type streamSource struct {
 	lastKeyFrame *flv.FlvTag
 	createId     int64
 	mutexId      sync.RWMutex
+	dataProducer wssAPI.Obj
 }
 
 func (this *streamSource) Init(msg *wssAPI.Msg) (err error) {
@@ -100,6 +101,14 @@ func (this *streamSource) SetProducer(status bool) (remove bool) {
 	}
 	this.bProducer = status
 	if this.bProducer == false {
+		//通知生产者
+		logger.LOGD(this.dataProducer)
+		if wssAPI.InterfaceValid(this.dataProducer) {
+			logger.LOGD("force closed")
+			msg := &wssAPI.Msg{Type: wssAPI.MSG_SourceClosed_Force}
+			this.dataProducer.ProcessMessage(msg)
+			this.dataProducer = nil
+		}
 		//clear cache
 		this.clearCache()
 		//notify sinks stop

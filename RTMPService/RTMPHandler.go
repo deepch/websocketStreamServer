@@ -98,7 +98,13 @@ func (this *RTMPHandler) ProcessMessage(msg *wssAPI.Msg) (err error) {
 	}
 	switch msg.Type {
 	case wssAPI.MSG_GetSource_NOTIFY:
-		this.srcAdded = true
+		this.sinkAdded = true
+	case wssAPI.MSG_GetSource_Failed:
+		//发送404
+		this.rtmpInstance.CmdStatus("error", "NetStream.Play.StreamNotFound",
+			"paly failed", this.streamName, 0, RTMP_channel_Invoke)
+	case wssAPI.MSG_SourceClosed_Force:
+		this.srcAdded = false
 	case wssAPI.MSG_FLV_TAG:
 		tag := msg.Param1.(*flv.FlvTag)
 		err = this.player.appendFlvTag(tag)
@@ -293,6 +299,7 @@ func (this *RTMPHandler) handleInvoke(packet *RTMPPacket) (err error) {
 		//add to source
 		this.streamName = this.app + "/" + amfobj.AMF0GetPropByIndex(3).Value.StrValue
 		taskAddSrc := &eStreamerEvent.EveAddSource{}
+		taskAddSrc.Producer = this
 		taskAddSrc.StreamName = this.streamName
 		err = wssAPI.HandleTask(taskAddSrc)
 		if err != nil {

@@ -325,20 +325,24 @@ func (this *StreamerService) pullStream(app, streamName, sinkId string, sinker w
 			source, ok := src.(*streamSource)
 			if true == ok {
 				logger.LOGD("add sink")
+				msg := &wssAPI.Msg{}
+				msg.Type = wssAPI.MSG_GetSource_NOTIFY
+				sinker.ProcessMessage(msg)
 				source.AddSink(sinkId, sinker)
 			} else {
 				logger.LOGE("add sink failed", source, ok)
+				msg := &wssAPI.Msg{Type: wssAPI.MSG_GetSource_Failed}
+				sinker.ProcessMessage(msg)
 			}
 		} else {
 			logger.LOGE("bad add", ok, src)
 			logger.LOGD(reflect.TypeOf(src))
+			msg := &wssAPI.Msg{Type: wssAPI.MSG_GetSource_Failed}
+			sinker.ProcessMessage(msg)
 		}
 
 	}()
 	if true == ok && wssAPI.InterfaceValid(src) {
-		msg := &wssAPI.Msg{}
-		msg.Type = wssAPI.MSG_GetSource_NOTIFY
-		sinker.ProcessMessage(msg)
 		return
 	}
 	//按顺序进行
@@ -351,10 +355,7 @@ func (this *StreamerService) pullStream(app, streamName, sinkId string, sinker w
 			continue
 		}
 		src, ok = this.pullStreamExec(app, streamName, addr)
-		if true == ok && src != nil && wssAPI.InterfaceValid(src) {
-			msg := &wssAPI.Msg{}
-			msg.Type = wssAPI.MSG_GetSource_NOTIFY
-			sinker.ProcessMessage(msg)
+		if true == ok && wssAPI.InterfaceValid(src) {
 			return
 		}
 	}

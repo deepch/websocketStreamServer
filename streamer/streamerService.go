@@ -7,6 +7,7 @@ import (
 	"events/eLiveListCtrl"
 	"events/eStreamerEvent"
 	"logger"
+	"runtime/debug"
 	"strconv"
 	"strings"
 	"sync"
@@ -104,7 +105,7 @@ func (this *StreamerService) HandleTask(task wssAPI.Task) (err error) {
 		if false == ok {
 			return errors.New("invalid param")
 		}
-		taskAddsrc.SrcObj, taskAddsrc.Id, err = this.addsource(taskAddsrc.StreamName)
+		taskAddsrc.SrcObj, taskAddsrc.Id, err = this.addsource(taskAddsrc.StreamName, taskAddsrc.Producer)
 
 		return
 	case eStreamerEvent.GetSource:
@@ -118,6 +119,8 @@ func (this *StreamerService) HandleTask(task wssAPI.Task) (err error) {
 		taskGetSrc.SrcObj, ok = this.sources[taskGetSrc.StreamName]
 		if false == ok {
 			return errors.New("not found:" + taskGetSrc.StreamName)
+		} else {
+			taskGetSrc.HasProducer = this.sources[taskGetSrc.StreamName].bProducer
 		}
 		logger.LOGT(taskGetSrc.StreamName)
 		//id zero
@@ -217,7 +220,7 @@ func (this *StreamerService) ProcessMessage(msg *wssAPI.Msg) (err error) {
 //src control sink
 //add source:not start src,start sinks
 //del source:not stop src,stop sinks
-func (this *StreamerService) addsource(path string) (src wssAPI.Obj, id int64, err error) {
+func (this *StreamerService) addsource(path string, producer wssAPI.Obj) (src wssAPI.Obj, id int64, err error) {
 
 	if false == this.checkStreamAddAble(path) {
 		return nil, -1, errors.New("bad name")
@@ -237,6 +240,7 @@ func (this *StreamerService) addsource(path string) (src wssAPI.Obj, id int64, e
 		oldSrc.mutexId.Lock()
 		oldSrc.createId++
 		id = oldSrc.createId
+		oldSrc.dataProducer = producer
 		oldSrc.mutexId.Unlock()
 		return
 	} else {
@@ -250,6 +254,7 @@ func (this *StreamerService) addsource(path string) (src wssAPI.Obj, id int64, e
 			oldSrc.mutexId.Lock()
 			oldSrc.createId++
 			id = oldSrc.createId
+			oldSrc.dataProducer = producer
 			oldSrc.mutexId.Unlock()
 			return
 		}
@@ -263,6 +268,7 @@ func (this *StreamerService) delSource(path string, id int64) (err error) {
 	logger.LOGT("del source:" + path)
 	oldSrc, exist := this.sources[path]
 
+	debug.PrintStack()
 	if exist == false {
 		return errors.New(path + " not found")
 	} else {
@@ -293,7 +299,11 @@ func (this *StreamerService) addSink(sinkInfo *eStreamerEvent.EveAddSink) (err e
 	sinker := sinkInfo.Sinker
 	sinkInfo.Added = false
 	src, exist := this.sources[path]
-	if false == exist {
+	hasProducer := false
+	if nil != src {
+		hasProducer = src.bProducer
+	}
+	if false == exist || false == hasProducer {
 		tmpStrings := strings.Split(path, "/")
 		if len(tmpStrings) < 2 {
 			return errors.New("add sink bad path:" + path)

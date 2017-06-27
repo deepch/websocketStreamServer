@@ -84,6 +84,9 @@ func (this *websocketHandler) ProcessMessage(msg *wssAPI.Msg) (err error) {
 	switch msg.Type {
 	case wssAPI.MSG_GetSource_NOTIFY:
 		this.hasSink = true
+	case wssAPI.MSG_GetSource_Failed:
+		this.hasSink = false
+		this.sendWsStatus(this.conn, WS_status_error, NETSTREAM_PLAY_FAILED, 0)
 	case wssAPI.MSG_FLV_TAG:
 		tag := msg.Param1.(*flv.FlvTag)
 		err = this.appendFlvTag(tag)
@@ -283,7 +286,7 @@ func (this *websocketHandler) threadPlay() {
 		this.stPlay.mutexCache.Lock()
 		if this.stPlay.cache == nil || this.stPlay.cache.Len() == 0 {
 			this.stPlay.mutexCache.Unlock()
-			time.Sleep(30 * time.Millisecond)
+			time.Sleep(10 * time.Millisecond)
 			continue
 		}
 		tag := this.stPlay.cache.Front().Value.(*flv.FlvTag)
