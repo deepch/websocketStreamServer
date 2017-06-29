@@ -146,16 +146,21 @@ func (this *FMP4Creater) createAudioInitSeg(tag *flv.FlvTag) (slice *FMP4Slice) 
 	case AAC:
 		this.audioSampleSize = 1024
 		asc := aac.GenerateAudioSpecificConfig(tag.Data[2:])
+		logger.LOGD(tag.Data[2:])
+		logger.LOGD(asc.SamplingFrequency)
 		this.audioSampleRate = uint32(asc.SamplingFrequency)
 		logger.LOGT(asc.AudioObjectType)
 		logger.LOGT(this.audioSampleRate)
 		//		soundRate := ((tag.Data[0] & 0xC) >> 2)
 		mpeg4Asc := aac.MP4AudioGetConfig(tag.Data[2:])
-		if mpeg4Asc.Ext_object_type != 0 {
+		logger.LOGD(mpeg4Asc.Ext_object_type)
+		logger.LOGD(mpeg4Asc.Sample_rate)
+		if mpeg4Asc.Ext_object_type != 0 && mpeg4Asc.Ext_sample_rate != 0 {
 			this.audioSampleRate = uint32(mpeg4Asc.Ext_sample_rate)
 		} else {
 			this.audioSampleRate = uint32(mpeg4Asc.Sample_rate)
 		}
+
 		this.audioSampleDuration = this.audioSampleSize * 1000 / this.audioSampleRate
 		logger.LOGT(this.audioSampleDuration)
 		logger.LOGT(this.audioSampleRate)
