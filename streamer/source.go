@@ -171,7 +171,8 @@ func (this *streamSource) AddSink(id string, sinker wssAPI.Obj) (err error) {
 		if this.lastKeyFrame != nil {
 			msg.Param1 = this.lastKeyFrame
 			msg.Type = wssAPI.MSG_FLV_TAG
-			sink.ProcessMessage(msg)
+			logger.LOGD("not send last keyframe")
+			//			sink.ProcessMessage(msg)
 		}
 	}
 	return

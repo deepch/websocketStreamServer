@@ -312,7 +312,7 @@ func (this *FMP4Creater) createAudioInitSeg(tag *flv.FlvTag) (slice *FMP4Slice) 
 	moovBox.Pop()
 	//stbl
 	moovBox.Push([]byte("stbl"))
-	this.stsdA(moovBox, tag) //stsd
+	this.stsdA1(moovBox, tag) //stsd
 	//stts
 	moovBox.Push([]byte("stts"))
 	moovBox.Push4Bytes(0) //version
@@ -899,7 +899,7 @@ func (this *FMP4Creater) stsdA(box *MP4Box, tag *flv.FlvTag) {
 	box.Push4Bytes(0) //version and flag
 	box.PushByte(3)   //tag
 	esd := &MP4Box{}
-	esd.Push2Bytes(0) //ES ID
+	esd.Push2Bytes(1) //ES ID
 	esd.PushByte(0)   //1:streamDependenceFlag=0  1:URL_Flag=0 1:OCRstreamFlag=0 5:streamPrority=0
 	esd.PushByte(4)   //DecoderConfigDescriptor tag
 	esdDesc := &MP4Box{}
@@ -934,6 +934,7 @@ func (this *FMP4Creater) stsdA(box *MP4Box, tag *flv.FlvTag) {
 	esdDescData := esdDesc.Flush()
 	esd.PushByte(byte(len(esdDescData)))
 	esd.PushBytes(esdDescData)
+	//0x 06 01 02 or 0x06 0x80 0x80 0x80 01 02
 	esd.PushByte(0x06) //SLConfigDescrTag
 	esd.PushByte(0x01) //length field
 	esd.PushByte(0x02) //predefined 0x02 reserved for use int mp4 faile
@@ -992,5 +993,86 @@ func (this *FMP4Creater) aacForHttp(tag *flv.FlvTag, useragent string) (cfg []by
 		cfg[2] |= (2 << 2)
 		cfg[3] = 0
 	}
+	return
+}
+
+func (this *FMP4Creater) stsdA1(box *MP4Box, tag *flv.FlvTag) {
+	//stsd
+	box.Push([]byte("stsd"))
+	box.Push4Bytes(0)
+	box.Push4Bytes(1)
+	//mp4a
+	box.Push([]byte("mp4a"))
+	box.Push4Bytes(0)  //reserved
+	box.Push2Bytes(0)  //reserved
+	box.Push2Bytes(1)  //data reference index
+	box.Push8Bytes(0)  //reserved int32[2]
+	box.Push2Bytes(2)  //channel count
+	box.Push2Bytes(16) //sample size
+	box.Push2Bytes(0)  //pre defined
+	box.Push2Bytes(0)  //reserved
+	logger.LOGT(this.audioSampleRate)
+	box.Push4Bytes(this.audioSampleRate << 16) //samplerate
+	//esds
+	box.Push([]byte("esds"))
+	box.Push4Bytes(0) //version and flag
+	box.PushByte(3)   //tag
+	box.PushByte(0x80)
+	box.PushByte(0x80)
+	box.PushByte(0x80)
+	esd := &MP4Box{}
+	esd.Push2Bytes(0x02) //ES ID
+	esd.PushByte(0)      //1:streamDependenceFlag=0  1:URL_Flag=0 1:OCRstreamFlag=0 5:streamPrority=0
+	esd.PushByte(4)      //DecoderConfigDescriptor tag
+	box.PushByte(0x80)
+	box.PushByte(0x80)
+	box.PushByte(0x80)
+	esdDesc := &MP4Box{}
+	switch this.audioType { //object type indication
+	case MP3:
+		esdDesc.PushByte(0x6b)
+	case AAC:
+		esdDesc.PushByte(0x40)
+	default:
+		esdDesc.PushByte(0x40)
+		logger.LOGT(fmt.Sprintf("audio type %d not support", this.audioType))
+	}
+	esdDesc.PushByte(0x15)      //固定15  streamType upstream reserved
+	esdDesc.PushByte(0)         //24位buffer size db
+	esdDesc.Push2Bytes(0)       //24位补充
+	esdDesc.Push4Bytes(0x20000) //max bitrate
+	esdDesc.Push4Bytes(0)       //avg bitrate
+	if this.audioType == AAC {
+		esdDesc.PushByte(0x05)
+		if len(tag.Data) >= 2 {
+			//esdDesc.PushByte(byte(len(tag.Data) - 2))
+			//esdDesc.PushBytes(tag.Data[2:])
+			//ascData := this.aacForHttp(tag, "")
+			//log.Println(ascData)
+			//esdDesc.PushByte(byte(len(ascData)))
+			//esdDesc.PushBytes(ascData)
+			esdDesc.PushByte(byte(len(this.ascData)))
+			esdDesc.PushBytes(this.ascData)
+		}
+
+	}
+	esdDescData := esdDesc.Flush()
+	esd.PushByte(byte(len(esdDescData)))
+	esd.PushBytes(esdDescData)
+	esd.PushByte(0x06) //SLConfigDescrTag
+	box.PushByte(0x80)
+	box.PushByte(0x80)
+	box.PushByte(0x80)
+	esd.PushByte(0x01) //length field
+	esd.PushByte(0x02) //predefined 0x02 reserved for use int mp4 faile
+	esdData := esd.Flush()
+	box.PushByte(byte(len(esdData)))
+	box.PushBytes(esdData)
+	//!esds
+	box.Pop()
+	//!mp4a
+	box.Pop()
+	//!stsd
+	box.Pop()
 	return
 }

@@ -1,6 +1,7 @@
 {
     "upstreams": [
-        { "Id": "hk", "app": "live", "protocol": "rtmp", "port": 1935, "addr": "live.hkstv.hk.lxdns.com", "weight": 1000 },
+        { "Id": "hk", "app": "live", "protocol": "rtmp", "port": 1935, "addr": "live.hkstv.hk.lxdns.com", "weight": 10 },
+		{ "Id": "tt", "app": "abjlive", "protocol": "rtmp", "port": 1935, "addr": "pili-live-rtmp.qiniu.qcus.cn", "weight": 10 },
 		{"Id": "ams", "app": "live", "protocol": "rtmp", "port": 1935, "addr": "127.0.0.1", "weight": 10}
     ],
     "upstreamsTimeoutSec": 5,
