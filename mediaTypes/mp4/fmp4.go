@@ -312,7 +312,7 @@ func (this *FMP4Creater) createAudioInitSeg(tag *flv.FlvTag) (slice *FMP4Slice) 
 	moovBox.Pop()
 	//stbl
 	moovBox.Push([]byte("stbl"))
-	this.stsdA1(moovBox, tag) //stsd
+	this.stsdA(moovBox, tag) //stsd
 	//stts
 	moovBox.Push([]byte("stts"))
 	moovBox.Push4Bytes(0) //version
