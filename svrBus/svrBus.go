@@ -1,6 +1,7 @@
 package svrBus
 
 import (
+	"HLSService"
 	"RTMPService"
 	"RTSPService"
 	"backend"
@@ -24,6 +25,7 @@ type busConfig struct {
 	LogPath                 string `json:"LogPath"`
 	RTSPConfigName          string `json:"RTSP"`
 	StreamManagerConfigName string `json:"Streamer"`
+	HLSConfigName           string `json:"HLS"`
 }
 
 type SvrBus struct {
@@ -85,50 +87,83 @@ func (this *SvrBus) loadConfig() (err error) {
 		if len(cfg.StreamManagerConfigName) > 0 {
 			msg.Param1 = cfg.StreamManagerConfigName
 		}
-		livingSvr.Init(msg)
-		this.mutexServices.Lock()
-		this.services[livingSvr.GetType()] = livingSvr
-		this.mutexServices.Unlock()
+		err = livingSvr.Init(msg)
+		if err != nil {
+			logger.LOGE(err.Error())
+		} else {
+			this.mutexServices.Lock()
+			this.services[livingSvr.GetType()] = livingSvr
+			this.mutexServices.Unlock()
+		}
 	}
 
 	if len(cfg.RTMPConfigName) > 0 {
 		rtmpSvr := &RTMPService.RTMPService{}
 		msg := &wssAPI.Msg{}
 		msg.Param1 = cfg.RTMPConfigName
-		rtmpSvr.Init(msg)
-		this.mutexServices.Lock()
-		this.services[rtmpSvr.GetType()] = rtmpSvr
-		this.mutexServices.Unlock()
+		err = rtmpSvr.Init(msg)
+		if err != nil {
+			logger.LOGE(err.Error())
+		} else {
+			this.mutexServices.Lock()
+			this.services[rtmpSvr.GetType()] = rtmpSvr
+			this.mutexServices.Unlock()
+		}
 	}
 
 	if len(cfg.WebSocketConfigName) > 0 {
 		webSocketSvr := &webSocketService.WebSocketService{}
 		msg := &wssAPI.Msg{}
 		msg.Param1 = cfg.WebSocketConfigName
-		webSocketSvr.Init(msg)
-		this.mutexServices.Lock()
-		this.services[webSocketSvr.GetType()] = webSocketSvr
-		this.mutexServices.Unlock()
+		err = webSocketSvr.Init(msg)
+		if err != nil {
+			logger.LOGE(err.Error())
+		} else {
+			this.mutexServices.Lock()
+			this.services[webSocketSvr.GetType()] = webSocketSvr
+			this.mutexServices.Unlock()
+		}
 	}
 
 	if len(cfg.BackendConfigName) > 0 {
 		backendSvr := &backend.BackendService{}
 		msg := &wssAPI.Msg{}
 		msg.Param1 = cfg.BackendConfigName
-		backendSvr.Init(msg)
-		this.mutexServices.Lock()
-		this.services[backendSvr.GetType()] = backendSvr
-		this.mutexServices.Unlock()
+		err = backendSvr.Init(msg)
+		if err != nil {
+			logger.LOGE(err.Error())
+		} else {
+			this.mutexServices.Lock()
+			this.services[backendSvr.GetType()] = backendSvr
+			this.mutexServices.Unlock()
+		}
 	}
 
 	if len(cfg.RTSPConfigName) > 0 {
 		rtspSvr := &RTSPService.RTSPService{}
 		msg := &wssAPI.Msg{}
 		msg.Param1 = cfg.RTSPConfigName
-		rtspSvr.Init(msg)
-		this.mutexServices.Lock()
-		this.services[rtspSvr.GetType()] = rtspSvr
-		this.mutexServices.Unlock()
+		err = rtspSvr.Init(msg)
+		if err != nil {
+			logger.LOGE(err.Error())
+		} else {
+			this.mutexServices.Lock()
+			this.services[rtspSvr.GetType()] = rtspSvr
+			this.mutexServices.Unlock()
+		}
+	}
+
+	if len(cfg.HLSConfigName) > 0 {
+		hls := &HLSService.HLSService{}
+		msg := &wssAPI.Msg{Param1: cfg.HLSConfigName}
+		err = hls.Init(msg)
+		if err != nil {
+			logger.LOGE(err.Error())
+		} else {
+			this.mutexServices.Lock()
+			this.services[hls.GetType()] = hls
+			this.mutexServices.Unlock()
+		}
 	}
 	return
 }

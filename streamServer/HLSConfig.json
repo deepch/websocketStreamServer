@@ -1,0 +1,5 @@
+{
+    "Port": 8081,
+	"streamRoute":"hls",
+	"ico":"ico.gif"
+}

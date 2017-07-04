@@ -8,7 +8,7 @@ import (
 
 //MP3header ,4bytes
 type MP3Header struct {
-	version     byte
+	Version     byte
 	layer       byte
 	bitrate     byte
 	samplerate  byte
@@ -28,7 +28,7 @@ func ParseMP3Header(data []byte) (header *MP3Header, err error) {
 	if data[0] != 0xff || (data[1]&0xe0) != 0xe0 {
 		return nil, errors.New("invalid mp3 sync data")
 	}
-	header.version = ((data[1] & 0x18) >> 3)
+	header.Version = ((data[1] & 0x18) >> 3)
 	header.layer = ((data[1] & 0x6) >> 1)
 	header.HasCRC = ((data[1] & 0x1) >> 0)
 	header.bitrate = ((data[2] & 0xf0) >> 4)
@@ -36,7 +36,7 @@ func ParseMP3Header(data []byte) (header *MP3Header, err error) {
 	header.channelMode = ((data[3] & 0xc0) >> 6)
 	//计算比特率和采样率和声道
 	//bitrate
-	switch header.version {
+	switch header.Version {
 	//MPEG2.5
 	case 0:
 		switch header.layer {
@@ -376,7 +376,7 @@ func ParseMP3Header(data []byte) (header *MP3Header, err error) {
 	}
 
 	//samplerate
-	switch header.version {
+	switch header.Version {
 	//MPEG2.5
 	case 0:
 		switch header.samplerate {
@@ -408,7 +408,7 @@ func ParseMP3Header(data []byte) (header *MP3Header, err error) {
 			header.SampleRate = 32000
 		}
 	default:
-		logger.LOGI(fmt.Sprintf("invlaid mp3 version:%d", header.version))
+		logger.LOGI(fmt.Sprintf("invlaid mp3 version:%d", header.Version))
 	}
 	//channel
 	if header.channelMode == 3 {

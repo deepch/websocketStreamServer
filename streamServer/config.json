@@ -4,5 +4,6 @@
     "Backend": "BackendConfig.json",
     "Streamer": "Streamer.json",
     "LogPath": "Log",
-    "RTSP": "RTSPConfig.json"
+    "RTSP": "RTSPConfig.json",
+	"HLS":"HLSConfig.json"
 }
