@@ -323,3 +323,32 @@ func (this *TsCreater) addPatPmt() {
 func (this *TsCreater) appendTsPkt(tsBuf []byte) {
 	this.tsCache.PushBack(tsBuf)
 }
+
+func (this *TsCreater) getTsCount(dataSize int, addPCR, addDts bool) (tsCount, padSize int) {
+	firstValidSize := TS_length - 4
+	if addPCR {
+		firstValidSize -= 8
+	}
+	if addDts {
+		firstValidSize -= 19
+	} else {
+		firstValidSize -= 14
+	}
+	validSize := TS_length - 4
+
+	if dataSize <= firstValidSize {
+		tsCount = 1
+		padSize = firstValidSize - padSize
+		return tsCount, padSize
+	} else {
+		dataSize -= firstValidSize
+		tsCount = dataSize/validSize + 1
+		padSize = dataSize % validSize
+		if padSize != 0 {
+			tsCount++
+			padSize = validSize - padSize
+		}
+		return tsCount, padSize
+	}
+	return
+}
