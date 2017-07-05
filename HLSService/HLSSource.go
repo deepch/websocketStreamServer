@@ -5,7 +5,9 @@ import (
 	"events/eStreamerEvent"
 	"logger"
 	"mediaTypes/flv"
+	"mediaTypes/ts"
 	"net/http"
+	"os"
 	"wssAPI"
 )
 
@@ -19,6 +21,7 @@ type HLSSource struct {
 	audioHeader *flv.FlvTag
 	videoHeader *flv.FlvTag
 	segIdx      int64
+	tsCur       *ts.TsCreater
 }
 
 func (this *HLSSource) Init(msg *wssAPI.Msg) (err error) {
@@ -133,9 +136,38 @@ func (this *HLSSource) AddFlvTag(tag *flv.FlvTag) {
 
 func (this *HLSSource) createNewTSSegment(keyframe *flv.FlvTag) {
 	//可能有多帧
-	logger.LOGD("new seg")
+	if this.tsCur == nil {
+		this.tsCur = &ts.TsCreater{}
+		if this.audioHeader != nil {
+			this.tsCur.AddTag(this.audioHeader)
+		}
+		if this.videoHeader != nil {
+			this.tsCur.AddTag(this.videoHeader)
+		}
+		this.tsCur.AddTag(keyframe)
+	} else {
+		//flush data
+		if this.tsCur.GetDuration()<10000{
+			return
+		}
+		data := this.tsCur.FlushTsList()
+		wssAPI.CreateDirectory("audio")
+		fp, err := os.Create("audio/init.ts")
+		if err != nil {
+			logger.LOGE(err.Error())
+			return
+		}
+		for e := data.Front(); e != nil; e = e.Next() {
+			fp.Write(e.Value.([]byte))
+		}
+		fp.Close()
+		logger.LOGD(data.Len())
+		logger.LOGF("one seg ok")
+	}
 }
 
 func (this *HLSSource) appendTag(tag *flv.FlvTag) {
-
+	if this.tsCur != nil {
+		this.tsCur.AddTag(tag)
+	}
 }

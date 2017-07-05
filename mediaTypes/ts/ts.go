@@ -16,7 +16,7 @@ const (
 	Video_Id  = 0x100
 	Audio_Id  = 0x101
 	TS_length = 188
-	PCH_HZ    = 27000000
+	PCR_HZ    = 27000000
 )
 
 func init() {
@@ -33,7 +33,6 @@ func init() {
 		}
 		crc32Table[i] = k
 	}
-
 }
 
 func Crc32Calculate(buffer []uint8) (crc32reg uint32) {
@@ -41,6 +40,7 @@ func Crc32Calculate(buffer []uint8) (crc32reg uint32) {
 	for _, v := range buffer {
 		crc32reg = (crc32reg << 8) ^ crc32Table[((crc32reg>>24)^uint32(v))&0xFF]
 	}
+
 	return crc32reg
 }
 
@@ -60,10 +60,18 @@ type TsCreater struct {
 	audioSampleHz  int
 	audioPts       int64
 	beginTime      uint32
-	tsCache        list.List
+	nowTime uint32
+	tsCache        *list.List
 }
 
 func (this *TsCreater) AddTag(tag *flv.FlvTag) {
+	if flv.FLV_TAG_ScriptData == tag.TagType {
+		return
+	}
+	if this.tsCache == nil {
+		this.tsCache = list.New()
+	}
+	this.nowTime=tag.Timestamp
 	if true == this.avHeaderAdded(tag) {
 		if 0xffffffff == this.beginTime {
 			this.beginTime = tag.Timestamp
@@ -97,19 +105,539 @@ func (this *TsCreater) AddTag(tag *flv.FlvTag) {
 		var payloadSize int
 
 		if flv.FLV_TAG_Audio == tag.TagType {
+			if this.audioTypeId == 0xf {
+				adth := aac.GenerateADTHeader(this.asc, len(tag.Data)-2)
+				payloadSize = len(adth) + len(tag.Data) - 2
+				dataPayload = make([]byte, payloadSize)
+				copy(dataPayload, adth)
+				copy(dataPayload[len(adth):], tag.Data[2:])
+			} else if 0x03 == this.audioTypeId {
+				payloadSize = len(tag.Data) - 1
+				dataPayload = make([]byte, payloadSize)
+				copy(dataPayload, tag.Data[1:])
+			} else if 0x04 == this.audioTypeId {
+				payloadSize = len(tag.Data) - 1
+				dataPayload = make([]byte, payloadSize)
+				copy(dataPayload, tag.Data[1:])
+			} else {
+				logger.LOGW("not support audio")
+			}
+		} else if flv.FLV_TAG_Video == tag.TagType {
+			//AVC?
+			if tag.Data[0] == 0x17 && tag.Data[1] == 0 {
+				this.parseAVC(tag.Data)
+				return
+			}
+
+			nalCur := 5
+			breakFor := false
+			for nalCur < len(tag.Data) && false == breakFor {
+				nalSize := 0
+				nalSizeSlice := tag.Data[nalCur : nalCur+4]
+				nalSize = (int(nalSizeSlice[0]) << 24) | (int(nalSizeSlice[1]) << 16) |
+					(int(nalSizeSlice[2]) << 8) | (int(nalSizeSlice[3]) << 0)
+				nalCur += 4
+				nalType := tag.Data[nalCur] & 0x1f
+				switch nalType {
+				case h264.Nal_type_sei:
+					this.sei = make([]byte, nalSize)
+					copy(this.sei, tag.Data[nalCur:nalCur+nalSize])
+					nalCur += nalSize
+				case h264.Nal_type_idr:
+					payloadSize = nalSize + 10 + len(this.sps) + len(this.pps) + 8
+					if this.sei != nil {
+						payloadSize += len(this.sei) + 4
+					}
+					dataPayload = make([]byte, payloadSize)
+					tmp32 = 0
+					dataPayload[tmp32] = 0x00
+					tmp32++
+					dataPayload[tmp32] = 0x00
+					tmp32++
+					dataPayload[tmp32] = 0x00
+					tmp32++
+					dataPayload[tmp32] = 0x01
+					tmp32++
+					dataPayload[tmp32] = 0x09
+					tmp32++
+					dataPayload[tmp32] = 0x10
+					tmp32++
+
+					dataPayload[tmp32] = 0x00
+					tmp32++
+					dataPayload[tmp32] = 0x00
+					tmp32++
+					dataPayload[tmp32] = 0x00
+					tmp32++
+					dataPayload[tmp32] = 0x01
+					tmp32++
+
+					copy(dataPayload[tmp32:], this.sps)
+					tmp32 += uint32(len(this.sps))
+
+					dataPayload[tmp32] = 0x00
+					tmp32++
+					dataPayload[tmp32] = 0x00
+					tmp32++
+					dataPayload[tmp32] = 0x00
+					tmp32++
+					dataPayload[tmp32] = 0x01
+					tmp32++
+					copy(dataPayload[tmp32:], this.pps)
+					tmp32 += uint32(len(this.pps))
+
+					if this.sei != nil {
+						dataPayload[tmp32] = 0x00
+						tmp32++
+						dataPayload[tmp32] = 0x00
+						tmp32++
+						dataPayload[tmp32] = 0x00
+						tmp32++
+						dataPayload[tmp32] = 0x01
+						tmp32++
+						copy(dataPayload[tmp32:], this.sei)
+						tmp32 += uint32(len(this.sei))
+					}
+
+					dataPayload[tmp32] = 0x00
+					tmp32++
+					dataPayload[tmp32] = 0x00
+					tmp32++
+					dataPayload[tmp32] = 0x00
+					tmp32++
+					dataPayload[tmp32] = 0x01
+					tmp32++
+					copy(dataPayload[tmp32:], tag.Data[nalCur:nalCur+nalSize])
+					tmp32 += uint32(nalSize)
+					breakFor = true
+				case h264.Nal_type_sps:
+					nalCur += nalSize
+				case h264.Nal_type_pps:
+					nalCur += nalSize
+				default:
+					payloadSize = nalSize + 10
+					dataPayload = make([]byte, payloadSize)
+					tmp32 = 0
+					dataPayload[tmp32] = 0x00
+					tmp32++
+					dataPayload[tmp32] = 0x00
+					tmp32++
+					dataPayload[tmp32] = 0x00
+					tmp32++
+					dataPayload[tmp32] = 0x01
+					tmp32++
+					dataPayload[tmp32] = 0x09
+					tmp32++
+					dataPayload[tmp32] = 0x10
+					tmp32++
+
+					dataPayload[tmp32] = 0x00
+					tmp32++
+					dataPayload[tmp32] = 0x00
+					tmp32++
+					dataPayload[tmp32] = 0x00
+					tmp32++
+					dataPayload[tmp32] = 0x01
+					tmp32++
+
+					copy(dataPayload[tmp32:], tag.Data[nalCur:nalCur+nalSize])
+					tmp32 += uint32(nalSize)
+					breakFor = true
+				}
+			}
+		}
+
+		tsCount, padSize = this.getTsCount(payloadSize, addPCR, addDts)
+
+		tsBuf := make([]byte, TS_length)
+		cur := 0
+		if 1 == tsCount {
+			for idx := 0; idx < TS_length; idx++ {
+				tsBuf[idx] = 0xff
+			}
+			cur = 0
+			tsBuf[cur] = 0x47
+			cur++
+			if flv.FLV_TAG_Audio == tag.TagType {
+				tmp16 = uint16(0x4000 | Audio_Id)
+			} else {
+				tmp16 = uint16(0x4000 | Video_Id)
+			}
+			tsBuf[cur] = byte(tmp16 >> 8)
+			cur++
+			tsBuf[cur] = byte(tmp16 & 0xff)
+			cur++
+			if addPCR || padSize > 0 {
+				if flv.FLV_TAG_Audio == tag.TagType {
+					tsBuf[cur] = byte(0x30 | this.tsAcount)
+					cur++
+				} else {
+					tsBuf[cur] = byte(0x30 | this.tsVcount)
+					cur++
+				}
+			} else {
+				if flv.FLV_TAG_Audio == tag.TagType {
+					tsBuf[cur] = byte(0x10 | this.tsAcount)
+					cur++
+				} else {
+					tsBuf[cur] = byte(0x10 | this.tsVcount)
+					cur++
+				}
+			}
+			if flv.FLV_TAG_Audio == tag.TagType {
+				this.tsAcount++
+				if this.tsAcount == 16 {
+					this.tsAcount = 0
+				}
+			} else {
+				this.tsVcount++
+				if this.tsVcount == 16 {
+					this.tsVcount = 0
+				}
+			}
+
+			//!四字节头
+			//PCR、PAD
+			timeMS := uint64(tag.Timestamp - this.beginTime)
+			pcr := uint64(((timeMS * (PCR_HZ / 1000)) / 300) % 0x200000000)
+			if addPCR {
+				adpLength := 7 + padSize
+				tsBuf[cur] = byte(adpLength)
+				cur++
+				tsBuf[cur] = 0x10
+				cur++
+				tsBuf[cur] = byte((pcr & 0xfe000000) >> 25)
+				cur++
+				tsBuf[cur] = byte((pcr & 0x1fe0000) >> 17)
+				cur++
+				tsBuf[cur] = byte((pcr & 0x1fe00) >> 9)
+				cur++
+				tsBuf[cur] = byte((pcr & 0x1fe) >> 1)
+				cur++
+				tsBuf[cur] = byte(((pcr & 1) << 7) | 0x7e)
+				cur++
+				tsBuf[cur] = 0
+				cur++
+				cur += padSize
+			} else if false == addPCR && padSize > 0 {
+				adpLength := padSize - 1
+				tsBuf[cur] = byte(adpLength)
+				cur++
+				if padSize > 1 {
+					tsBuf[cur] = 0
+					cur += padSize - 1
+				}
+			}
+			//!PCR PAD
+			//PES
+			tsBuf[cur] = 0x00
+			cur++
+			tsBuf[cur] = 0x00
+			cur++
+			tsBuf[cur] = 0x01
+			cur++
+			if flv.FLV_TAG_Audio == tag.TagType {
+				tsBuf[cur] = 0xc0
+				cur++
+				tmp16 = uint16(payloadSize + 8)
+				tsBuf[cur] = byte(tmp16 >> 8)
+				cur++
+				tsBuf[cur] = byte(tmp16 & 0xff)
+				cur++
+				tsBuf[cur] = 0x80
+				cur++
+				tsBuf[cur] = 0x80
+				cur++
+				tsBuf[cur] = 0x05
+				cur++
+
+				audioPtsDelta := int64(90000 * int64(this.audioFrameSize) / int64(this.audioSampleHz))
+				this.audioPts += audioPtsDelta
+				tsBuf[cur] = byte((0x20) | ((this.audioPts & 0x1c0000000) >> 29) | 1)
+				cur++
+				tmp16 = uint16(((this.audioPts & 0x3fff8000) >> 14) | 1)
+				tsBuf[cur] = byte((tmp16 >> 8) & 0xff)
+				cur++
+				tsBuf[cur] = byte(tmp16 & 0xff)
+				cur++
+				tmp16 = uint16((this.audioPts&0x7fff)<<1) | 1
+				tsBuf[cur] = byte((tmp16 >> 8) & 0xff)
+				cur++
+				tsBuf[cur] = byte(tmp16 & 0xff)
+				cur++
+
+				copy(tsBuf[cur:], dataPayload)
+				cur += payloadSize
+			} else {
+				tsBuf[cur] = 0xe0
+				cur++
+				tsBuf[cur] = 0x00
+				cur++
+				tsBuf[cur] = 0x00
+				cur++
+				tsBuf[cur] = 0x80
+				cur++
+				tsBuf[cur] = 0xc0
+				cur++
+				tsBuf[cur] = 0x0a
+				cur++
+
+				tsBuf[cur] = byte((3 << 4) | ((pcr & 0x1c0000000) >> 29) | 1)
+				cur++
+				tmp16 = uint16(((pcr & 0x3fff8000) >> 14) | 1)
+				tsBuf[cur] = byte((tmp16 >> 8) & 0xff)
+				cur++
+				tsBuf[cur] = byte(tmp16 & 0xff)
+				cur++
+				tmp16 = uint16(((pcr & 0x7fff) << 1) | 1)
+				tsBuf[cur] = byte((tmp16 >> 8) & 0xff)
+				cur++
+				tsBuf[cur] = byte(tmp16 & 0xff)
+				cur++
+				tsBuf[cur] = byte((1 << 4) | ((pcr & 0x1c0000000) >> 29) | 1)
+				cur++
+				tmp16 = uint16(((pcr & 0x3fff8000) >> 14) | 1)
+				tsBuf[cur] = byte((tmp16 >> 8) & 0xff)
+				cur++
+				tsBuf[cur] = byte(tmp16 & 0xff)
+				cur++
+				tmp16 = uint16(((pcr & 0x7fff) << 1) | 1)
+				tsBuf[cur] = byte((tmp16 >> 8) & 0xff)
+				cur++
+				tsBuf[cur] = byte(tmp16 & 0xff)
+				cur++
+				copy(tsBuf[cur:], dataPayload)
+				cur += payloadSize
+			}
+			//!PES
+			this.appendTsPkt(tsBuf)
 
 		} else {
+			//不止一个包的情况
+			payloadCur := 0
+			for i := 0; i < tsCount; i++ {
+				for idx := 0; idx < len(tsBuf); idx++ {
+					tsBuf[idx] = 0xff
+				}
+				cur = 0
+				//第一帧
+				if 0 == i {
+					tsBuf[cur] = 0x47
+					cur++
+					if flv.FLV_TAG_Audio == tag.TagType {
+						tmp16 = uint16(0x4000 | Audio_Id)
+					} else {
+						tmp16 = uint16(0x4000 | Video_Id)
+					}
+					tsBuf[cur] = byte(tmp16 >> 8)
+					cur++
+					tsBuf[cur] = byte(tmp16 & 0xff)
+					cur++
+					if addPCR {
+						if flv.FLV_TAG_Audio == tag.TagType {
+							tsBuf[cur] = byte(0x30 | this.tsAcount)
+							cur++
+						} else {
+							tsBuf[cur] = byte(0x30 | this.tsVcount)
+							cur++
+						}
+					} else {
+						if flv.FLV_TAG_Audio == tag.TagType {
+							tsBuf[cur] = byte(0x10 | this.tsAcount)
+							cur++
+						} else {
+							tsBuf[cur] = byte(0x10 | this.tsVcount)
+							cur++
+						}
+					}
 
+					if flv.FLV_TAG_Audio == tag.TagType {
+						this.tsAcount++
+						if this.tsAcount == 16 {
+							this.tsAcount = 0
+						}
+					} else {
+						this.tsVcount++
+						if this.tsVcount == 16 {
+							this.tsVcount = 0
+						}
+					}
+
+					//!四字节头
+					//PCR
+					timeMS := uint64(tag.Timestamp - this.beginTime)
+					pcr := uint64(((timeMS * (PCR_HZ / 1000)) / 300) % 0x200000000)
+					if addPCR {
+						adpLength := 7
+						tsBuf[cur] = byte(adpLength)
+						cur++
+						tsBuf[cur] = 0x10
+						cur++
+						tsBuf[cur] = byte((pcr & 0xfe000000) >> 25)
+						cur++
+						tsBuf[cur] = byte((pcr & 0x1fe0000) >> 17)
+						cur++
+						tsBuf[cur] = byte((pcr & 0x1fe00) >> 9)
+						cur++
+						tsBuf[cur] = byte((pcr & 0x1fe) >> 1)
+						cur++
+						tsBuf[cur] = byte(((pcr & 1) << 7) | 0x7e)
+						cur++
+						tsBuf[cur] = 0
+						cur++
+					}
+					//!PCR
+					//PES头
+					tsBuf[cur] = 0x00
+					cur++
+					tsBuf[cur] = 0x00
+					cur++
+					tsBuf[cur] = 0x01
+					cur++
+					if flv.FLV_TAG_Audio == tag.TagType {
+						tsBuf[cur] = 0xc0
+						cur++
+						tmp16 = uint16(payloadSize + 8)
+						tsBuf[cur] = byte(tmp16 >> 8)
+						cur++
+						tsBuf[cur] = byte(tmp16 & 0xff)
+						cur++
+						tsBuf[cur] = 0x80
+						cur++
+						tsBuf[cur] = 0x80
+						cur++
+						tsBuf[cur] = 0x05
+						cur++
+
+						audioPtsDelta := int64(90000 * int64(this.audioFrameSize) / int64(this.audioSampleHz))
+						this.audioPts += audioPtsDelta
+						tsBuf[cur] = byte((0x20) | ((this.audioPts & 0x1c0000000) >> 29) | 1)
+						cur++
+						tmp16 = uint16(((this.audioPts & 0x3fff8000) >> 14) | 1)
+						tsBuf[cur] = byte((tmp16 >> 8) & 0xff)
+						cur++
+						tsBuf[cur] = byte(tmp16 & 0xff)
+						cur++
+						tmp16 = uint16((this.audioPts&0x7fff)<<1) | 1
+						tsBuf[cur] = byte((tmp16 >> 8) & 0xff)
+						cur++
+						tsBuf[cur] = byte(tmp16 & 0xff)
+						cur++
+					} else {
+
+						tsBuf[cur] = 0xe0
+						cur++
+						tsBuf[cur] = 0x00
+						cur++
+						tsBuf[cur] = 0x00
+						cur++
+						tsBuf[cur] = 0x80
+						cur++
+						tsBuf[cur] = 0xc0
+						cur++
+						tsBuf[cur] = 0x0a
+						cur++
+
+						tsBuf[cur] = byte((3 << 4) | ((pcr & 0x1c0000000) >> 29) | 1)
+						cur++
+						tmp16 = uint16(((pcr & 0x3fff8000) >> 14) | 1)
+						tsBuf[cur] = byte((tmp16 >> 8) & 0xff)
+						cur++
+						tsBuf[cur] = byte(tmp16 & 0xff)
+						cur++
+						tmp16 = uint16(((pcr & 0x7fff) << 1) | 1)
+						tsBuf[cur] = byte((tmp16 >> 8) & 0xff)
+						cur++
+						tsBuf[cur] = byte(tmp16 & 0xff)
+						cur++
+						tsBuf[cur] = byte((1 << 4) | ((pcr & 0x1c0000000) >> 29) | 1)
+						cur++
+						tmp16 = uint16(((pcr & 0x3fff8000) >> 14) | 1)
+						tsBuf[cur] = byte((tmp16 >> 8) & 0xff)
+						cur++
+						tsBuf[cur] = byte(tmp16 & 0xff)
+						cur++
+						tmp16 = uint16(((pcr & 0x7fff) << 1) | 1)
+						tsBuf[cur] = byte((tmp16 >> 8) & 0xff)
+						cur++
+						tsBuf[cur] = byte(tmp16 & 0xff)
+						cur++
+					}
+					//!PES头
+					copy(tsBuf[cur:], dataPayload[payloadCur:TS_length-cur])
+					payloadCur += TS_length - cur
+					this.appendTsPkt(tsBuf)
+				} else {
+					//四字节头
+					tsBuf[cur] = 0x47
+					cur++
+					if flv.FLV_TAG_Audio == tag.TagType {
+						tmp16 = uint16(Audio_Id)
+					} else {
+						tmp16 = uint16(Video_Id)
+					}
+					tsBuf[cur] = byte(tmp16 >> 8)
+					cur++
+					tsBuf[cur] = byte(tmp16 & 0xff)
+					cur++
+					//!3字节头
+					if i == tsCount-1 && padSize != 0 {
+						//最后一帧，且有pad
+						if flv.FLV_TAG_Audio == tag.TagType {
+							tsBuf[cur] = byte(0x30 | this.tsAcount)
+							cur++
+						} else {
+							tsBuf[cur] = byte(0x30 | this.tsVcount)
+							cur++
+						}
+						tsBuf[cur] = byte(padSize - 1)
+						cur++
+						if padSize != 1 {
+							tsBuf[cur] = 0
+							cur++
+						}
+						copy(tsBuf[4+padSize:], dataPayload[payloadCur:payloadCur+TS_length-4-padSize])
+						payloadCur += TS_length - 4 - padSize
+					} else {
+						//普通添加数据
+						if flv.FLV_TAG_Audio == tag.TagType {
+							tsBuf[cur] = byte(0x10 | this.tsAcount)
+							cur++
+						} else {
+							tsBuf[cur] = byte(0x10 | this.tsVcount)
+							cur++
+						}
+
+						tmps := dataPayload[payloadCur : payloadCur+TS_length-cur]
+						copy(tsBuf[cur:], tmps)
+						payloadCur += TS_length - cur
+					}
+					if flv.FLV_TAG_Audio == tag.TagType {
+						this.tsAcount++
+						if this.tsAcount == 16 {
+							this.tsAcount = 0
+						}
+					} else {
+						this.tsVcount++
+						if this.tsVcount == 16 {
+							this.tsVcount = 0
+						}
+					}
+					this.appendTsPkt(tsBuf)
+				}
+			}
 		}
 	}
 }
 
 func (this *TsCreater) GetDuration() (sec int) {
-	return
+	return int(this.nowTime-this.beginTime)
 }
 
-func (this *TsCreater) GetData() (data []byte) {
-	return
+func (this *TsCreater) FlushTsList() (tsList *list.List) {
+	tsList = this.tsCache
+	this.tsCache = list.New()
+	return tsList
 }
 
 func (this *TsCreater) avHeaderAdded(tag *flv.FlvTag) (headerGeted bool) {
@@ -223,7 +751,7 @@ func (this *TsCreater) addPatPmt() {
 	cur++
 	tsBuf[cur] = byte((tmp16 >> 0) & 0xff)
 	cur++
-	tmp32 = Crc32Calculate(tsBuf[5:]) //CRC
+	tmp32 = Crc32Calculate(tsBuf[5:cur]) //CRC
 	tsBuf[cur] = byte((tmp32 >> 24) & 0xff)
 	cur++
 	tsBuf[cur] = byte((tmp32 >> 16) & 0xff)
@@ -307,7 +835,7 @@ func (this *TsCreater) addPatPmt() {
 	tsBuf[cur] = 0x00
 	cur++
 
-	tmp32 = Crc32Calculate(tsBuf[5:]) //CRC
+	tmp32 = Crc32Calculate(tsBuf[5:cur]) //CRC
 	tsBuf[cur] = byte((tmp32 >> 24) & 0xff)
 	cur++
 	tsBuf[cur] = byte((tmp32 >> 16) & 0xff)
@@ -321,7 +849,9 @@ func (this *TsCreater) addPatPmt() {
 }
 
 func (this *TsCreater) appendTsPkt(tsBuf []byte) {
-	this.tsCache.PushBack(tsBuf)
+	tmp := make([]byte, len(tsBuf))
+	copy(tmp, tsBuf)
+	this.tsCache.PushBack(tmp)
 }
 
 func (this *TsCreater) getTsCount(dataSize int, addPCR, addDts bool) (tsCount, padSize int) {
@@ -338,17 +868,19 @@ func (this *TsCreater) getTsCount(dataSize int, addPCR, addDts bool) (tsCount, p
 
 	if dataSize <= firstValidSize {
 		tsCount = 1
-		padSize = firstValidSize - padSize
+		padSize = firstValidSize - dataSize
 		return tsCount, padSize
 	} else {
-		dataSize -= firstValidSize
-		tsCount = dataSize/validSize + 1
-		padSize = dataSize % validSize
+		size := dataSize
+		size -= firstValidSize
+		tsCount = size/validSize + 1
+		padSize = size % validSize
 		if padSize != 0 {
 			tsCount++
 			padSize = validSize - padSize
 		}
 		return tsCount, padSize
 	}
+
 	return
 }

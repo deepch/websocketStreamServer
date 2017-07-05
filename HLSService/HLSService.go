@@ -115,9 +115,12 @@ func (this *HLSService) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 			if exist == false {
 				source = this.createSource(streamName)
 				if wssAPI.InterfaceIsNil(source) {
-
+					logger.LOGE("add hsl source "+streamName+" failed")
+					w.WriteHeader(404)
+					return
 				} else {
-
+					source.ServeHTTP(w,req)
+					return
 				}
 			}
 			source.ServeHTTP(w, req)
