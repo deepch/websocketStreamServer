@@ -60,8 +60,9 @@ type TsCreater struct {
 	audioSampleHz  int
 	audioPts       int64
 	beginTime      uint32
-	nowTime uint32
+	nowTime        uint32
 	tsCache        *list.List
+	keyframeWrited bool
 }
 
 func (this *TsCreater) AddTag(tag *flv.FlvTag) {
@@ -69,9 +70,10 @@ func (this *TsCreater) AddTag(tag *flv.FlvTag) {
 		return
 	}
 	if this.tsCache == nil {
+		this.keyframeWrited = false
 		this.tsCache = list.New()
 	}
-	this.nowTime=tag.Timestamp
+	this.nowTime = tag.Timestamp
 	if true == this.avHeaderAdded(tag) {
 		if 0xffffffff == this.beginTime {
 			this.beginTime = tag.Timestamp
@@ -98,7 +100,6 @@ func (this *TsCreater) AddTag(tag *flv.FlvTag) {
 		}
 
 		var tsCount, padSize int
-		var tmp32 uint32
 		var tmp16 uint16
 
 		var dataPayload []byte
@@ -123,128 +124,12 @@ func (this *TsCreater) AddTag(tag *flv.FlvTag) {
 				logger.LOGW("not support audio")
 			}
 		} else if flv.FLV_TAG_Video == tag.TagType {
-			//AVC?
-			if tag.Data[0] == 0x17 && tag.Data[1] == 0 {
-				this.parseAVC(tag.Data)
+			dataPayload = this.videoPayload(tag)
+			if nil == dataPayload {
+				logger.LOGF(dataPayload)
 				return
 			}
-
-			nalCur := 5
-			breakFor := false
-			for nalCur < len(tag.Data) && false == breakFor {
-				nalSize := 0
-				nalSizeSlice := tag.Data[nalCur : nalCur+4]
-				nalSize = (int(nalSizeSlice[0]) << 24) | (int(nalSizeSlice[1]) << 16) |
-					(int(nalSizeSlice[2]) << 8) | (int(nalSizeSlice[3]) << 0)
-				nalCur += 4
-				nalType := tag.Data[nalCur] & 0x1f
-				switch nalType {
-				case h264.Nal_type_sei:
-					this.sei = make([]byte, nalSize)
-					copy(this.sei, tag.Data[nalCur:nalCur+nalSize])
-					nalCur += nalSize
-				case h264.Nal_type_idr:
-					payloadSize = nalSize + 10 + len(this.sps) + len(this.pps) + 8
-					if this.sei != nil {
-						payloadSize += len(this.sei) + 4
-					}
-					dataPayload = make([]byte, payloadSize)
-					tmp32 = 0
-					dataPayload[tmp32] = 0x00
-					tmp32++
-					dataPayload[tmp32] = 0x00
-					tmp32++
-					dataPayload[tmp32] = 0x00
-					tmp32++
-					dataPayload[tmp32] = 0x01
-					tmp32++
-					dataPayload[tmp32] = 0x09
-					tmp32++
-					dataPayload[tmp32] = 0x10
-					tmp32++
-
-					dataPayload[tmp32] = 0x00
-					tmp32++
-					dataPayload[tmp32] = 0x00
-					tmp32++
-					dataPayload[tmp32] = 0x00
-					tmp32++
-					dataPayload[tmp32] = 0x01
-					tmp32++
-
-					copy(dataPayload[tmp32:], this.sps)
-					tmp32 += uint32(len(this.sps))
-
-					dataPayload[tmp32] = 0x00
-					tmp32++
-					dataPayload[tmp32] = 0x00
-					tmp32++
-					dataPayload[tmp32] = 0x00
-					tmp32++
-					dataPayload[tmp32] = 0x01
-					tmp32++
-					copy(dataPayload[tmp32:], this.pps)
-					tmp32 += uint32(len(this.pps))
-
-					if this.sei != nil {
-						dataPayload[tmp32] = 0x00
-						tmp32++
-						dataPayload[tmp32] = 0x00
-						tmp32++
-						dataPayload[tmp32] = 0x00
-						tmp32++
-						dataPayload[tmp32] = 0x01
-						tmp32++
-						copy(dataPayload[tmp32:], this.sei)
-						tmp32 += uint32(len(this.sei))
-					}
-
-					dataPayload[tmp32] = 0x00
-					tmp32++
-					dataPayload[tmp32] = 0x00
-					tmp32++
-					dataPayload[tmp32] = 0x00
-					tmp32++
-					dataPayload[tmp32] = 0x01
-					tmp32++
-					copy(dataPayload[tmp32:], tag.Data[nalCur:nalCur+nalSize])
-					tmp32 += uint32(nalSize)
-					breakFor = true
-				case h264.Nal_type_sps:
-					nalCur += nalSize
-				case h264.Nal_type_pps:
-					nalCur += nalSize
-				default:
-					payloadSize = nalSize + 10
-					dataPayload = make([]byte, payloadSize)
-					tmp32 = 0
-					dataPayload[tmp32] = 0x00
-					tmp32++
-					dataPayload[tmp32] = 0x00
-					tmp32++
-					dataPayload[tmp32] = 0x00
-					tmp32++
-					dataPayload[tmp32] = 0x01
-					tmp32++
-					dataPayload[tmp32] = 0x09
-					tmp32++
-					dataPayload[tmp32] = 0x10
-					tmp32++
-
-					dataPayload[tmp32] = 0x00
-					tmp32++
-					dataPayload[tmp32] = 0x00
-					tmp32++
-					dataPayload[tmp32] = 0x00
-					tmp32++
-					dataPayload[tmp32] = 0x01
-					tmp32++
-
-					copy(dataPayload[tmp32:], tag.Data[nalCur:nalCur+nalSize])
-					tmp32 += uint32(nalSize)
-					breakFor = true
-				}
-			}
+			payloadSize = len(dataPayload)
 		}
 
 		tsCount, padSize = this.getTsCount(payloadSize, addPCR, addDts)
@@ -631,7 +516,7 @@ func (this *TsCreater) AddTag(tag *flv.FlvTag) {
 }
 
 func (this *TsCreater) GetDuration() (sec int) {
-	return int(this.nowTime-this.beginTime)
+	return int(this.nowTime - this.beginTime)
 }
 
 func (this *TsCreater) FlushTsList() (tsList *list.List) {
@@ -883,4 +768,173 @@ func (this *TsCreater) getTsCount(dataSize int, addPCR, addDts bool) (tsCount, p
 	}
 
 	return
+}
+
+func (this *TsCreater) videoPayload(tag *flv.FlvTag) (payload []byte) {
+	if tag.Data[0] == 0x17 && tag.Data[1] == 0 {
+		this.parseAVC(tag.Data)
+		return nil
+	}
+	nalCur := 5
+	getKeyframe := false
+	nalList := list.New()
+	totalNalSize := 0
+	for nalCur < len(tag.Data) {
+		nalSize := 0
+		nalSizeSlice := tag.Data[nalCur : nalCur+4]
+		nalSize = (int(nalSizeSlice[0]) << 24) | (int(nalSizeSlice[1]) << 16) |
+			(int(nalSizeSlice[2]) << 8) | (int(nalSizeSlice[3]) << 0)
+		nalCur += 4
+		nalType := tag.Data[nalCur] & 0x1f
+
+		switch nalType {
+		case h264.Nal_type_sei:
+			this.sei = make([]byte, nalSize)
+			copy(this.sei, tag.Data[nalCur:nalCur+nalSize])
+		case h264.Nal_type_sps:
+			this.sps = make([]byte, nalSize)
+			copy(this.sps, tag.Data[nalCur:nalCur+nalSize])
+		case h264.Nal_type_pps:
+			this.pps = make([]byte, nalSize)
+			copy(this.pps, tag.Data[nalCur:nalCur+nalSize])
+		case h264.Nal_type_idr:
+			getKeyframe = true
+			this.keyframeWrited = true
+			totalNalSize += nalSize + 4
+			tmp := make([]byte, nalSize)
+			copy(tmp, tag.Data[nalCur:nalCur+nalSize])
+			nalList.PushBack(tmp)
+		default:
+			totalNalSize += nalSize + 4
+			tmp := make([]byte, nalSize)
+			copy(tmp, tag.Data[nalCur:nalCur+nalSize])
+			nalList.PushBack(tmp)
+		}
+		nalCur += nalSize
+	}
+
+	if false == getKeyframe && this.keyframeWrited == false {
+		logger.LOGE("no keyframe")
+		return nil
+	}
+
+	if nalList.Len() == 0 {
+		logger.LOGE("no frame")
+		return nil
+	}
+
+	if getKeyframe {
+		payloadSize := totalNalSize + 6
+
+		if len(this.sps) > 0 {
+			payloadSize += len(this.sps) + 4
+		}
+		if len(this.pps) > 0 {
+			payloadSize += len(this.pps) + 4
+		}
+		if len(this.sei) > 0 {
+			payloadSize += len(this.sei) + 4
+		}
+		tmp32 := 0
+		payload = make([]byte, payloadSize)
+		payload[tmp32] = 0x00
+		tmp32++
+		payload[tmp32] = 0x00
+		tmp32++
+		payload[tmp32] = 0x00
+		tmp32++
+		payload[tmp32] = 0x01
+		tmp32++
+		payload[tmp32] = 0x09
+		tmp32++
+		payload[tmp32] = 0x10
+		tmp32++
+
+		if len(this.sps) > 0 {
+			payload[tmp32] = 0x00
+			tmp32++
+			payload[tmp32] = 0x00
+			tmp32++
+			payload[tmp32] = 0x00
+			tmp32++
+			payload[tmp32] = 0x01
+			tmp32++
+
+			copy(payload[tmp32:], this.sps)
+			tmp32 += len(this.sps)
+		}
+
+		if len(this.pps) > 0 {
+			payload[tmp32] = 0x00
+			tmp32++
+			payload[tmp32] = 0x00
+			tmp32++
+			payload[tmp32] = 0x00
+			tmp32++
+			payload[tmp32] = 0x01
+			tmp32++
+			copy(payload[tmp32:], this.pps)
+			tmp32 += len(this.pps)
+		}
+
+		if len(this.sei) > 0 {
+			payload[tmp32] = 0x00
+			tmp32++
+			payload[tmp32] = 0x00
+			tmp32++
+			payload[tmp32] = 0x00
+			tmp32++
+			payload[tmp32] = 0x01
+			tmp32++
+			copy(payload[tmp32:], this.sei)
+			tmp32 += len(this.sei)
+		}
+
+		for e := nalList.Front(); e != nil; e = e.Next() {
+			buf := e.Value.([]byte)
+			payload[tmp32] = 0x00
+			tmp32++
+			payload[tmp32] = 0x00
+			tmp32++
+			payload[tmp32] = 0x00
+			tmp32++
+			payload[tmp32] = 0x01
+			tmp32++
+			copy(payload[tmp32:], buf)
+			tmp32 += len(buf)
+		}
+	} else {
+		payloadSize := totalNalSize + 6
+		payload = make([]byte, payloadSize)
+		tmp32 := 0
+		payload[tmp32] = 0x00
+		tmp32++
+		payload[tmp32] = 0x00
+		tmp32++
+		payload[tmp32] = 0x00
+		tmp32++
+		payload[tmp32] = 0x01
+		tmp32++
+		payload[tmp32] = 0x09
+		tmp32++
+		payload[tmp32] = 0x10
+		tmp32++
+
+		for e := nalList.Front(); e != nil; e = e.Next() {
+			buf := e.Value.([]byte)
+			payload[tmp32] = 0x00
+			tmp32++
+			payload[tmp32] = 0x00
+			tmp32++
+			payload[tmp32] = 0x00
+			tmp32++
+			payload[tmp32] = 0x01
+			tmp32++
+
+			copy(payload[tmp32:], buf)
+			tmp32 += len(buf)
+		}
+	}
+
+	return payload
 }

@@ -87,6 +87,30 @@ func TcpReadTimeout(conn net.Conn, size int, millSec int) (data []byte, err erro
 	return data, err
 }
 
+func TcpReadTimeDuration(conn net.Conn,size int,duration time.Duration) (data []byte, err error)   {
+	if duration > 0 {
+		err = conn.SetReadDeadline(time.Now().Add(duration))
+		if err != nil {
+			logger.LOGE(err.Error())
+			return
+		}
+		defer func() {
+			conn.SetReadDeadline(time.Time{})
+		}()
+	}
+	data = make([]byte, size)
+	received := 0
+	for received < int(size) {
+		ret, err := conn.Read(data[received:])
+		if err != nil {
+			logger.LOGE(err.Error())
+			return data[:received], err
+		}
+		received += ret
+	}
+	return data, err
+}
+
 func TcpWrite(conn net.Conn, data []byte) (writed int, err error) {
 	err = conn.SetReadDeadline(time.Now().Add(time.Hour))
 	if err != nil {
@@ -109,6 +133,26 @@ func TcpWrite(conn net.Conn, data []byte) (writed int, err error) {
 
 func TcpWriteTimeOut(conn net.Conn, data []byte, millSec int) (writed int, err error) {
 	err = conn.SetWriteDeadline(time.Now().Add(time.Millisecond * time.Duration(millSec)))
+	if err != nil {
+		logger.LOGE(err.Error())
+		return
+	}
+	defer func() {
+		conn.SetWriteDeadline(time.Time{})
+	}()
+	for writed < len(data) {
+		ret, err := conn.Write(data[writed:])
+		if err != nil {
+			logger.LOGE(err.Error())
+			return writed, err
+		}
+		writed += ret
+	}
+	return
+}
+
+func TcpWriteTimeDuration(conn net.Conn,data []byte,duration time.Duration)(writed int,err error)  {
+	err = conn.SetWriteDeadline(time.Now().Add(duration))
 	if err != nil {
 		logger.LOGE(err.Error())
 		return

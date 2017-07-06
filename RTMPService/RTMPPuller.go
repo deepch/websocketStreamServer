@@ -136,7 +136,7 @@ func (this *RTMPPuller) handleShake() (err error) {
 	conn := this.rtmp.Conn
 	c0 := make([]byte, 1)
 	c0[0] = 3
-	_, err = wssAPI.TcpWriteTimeOut(conn, c0, serviceConfig.TimeoutSec)
+	_, err = wssAPI.TcpWriteTimeDuration(conn, c0, time.Duration(serviceConfig.TimeoutSec)*time.Second)
 	if err != nil {
 		logger.LOGE("send c0 failed")
 		return
@@ -146,32 +146,32 @@ func (this *RTMPPuller) handleShake() (err error) {
 	for idx := 8; idx < len(c1); idx++ {
 		c1[idx] = byte(rand.Intn(255))
 	}
-	_, err = wssAPI.TcpWriteTimeOut(conn, c1, serviceConfig.TimeoutSec)
+	_, err = wssAPI.TcpWriteTimeDuration(conn, c1,time.Duration(serviceConfig.TimeoutSec)*time.Second)
 	if err != nil {
 		logger.LOGE("send c1 failed")
 		return
 	}
 	//read s0
-	s0, err := wssAPI.TcpReadTimeout(conn, 1, serviceConfig.TimeoutSec)
+	s0, err := wssAPI.TcpReadTimeDuration(conn, 1, time.Duration(serviceConfig.TimeoutSec)*time.Second)
 	if err != nil {
 		logger.LOGE("read s0 failed")
 		return
 	}
 	logger.LOGT(s0)
 	//read s1
-	s1, err := wssAPI.TcpReadTimeout(conn, randomSize+8, serviceConfig.TimeoutSec)
+	s1, err := wssAPI.TcpReadTimeDuration(conn, randomSize+8, time.Duration(serviceConfig.TimeoutSec)*time.Second)
 	if err != nil {
 		logger.LOGE("read s1 failed")
 		return
 	}
 	//send c2
-	_, err = wssAPI.TcpWriteTimeOut(conn, s1, serviceConfig.TimeoutSec)
+	_, err = wssAPI.TcpWriteTimeDuration(conn, s1, time.Duration(serviceConfig.TimeoutSec)*time.Second)
 	if err != nil {
 		logger.LOGE("send c2 failed")
 		return
 	}
 	//read s2
-	s2, err := wssAPI.TcpReadTimeout(conn, randomSize+8, serviceConfig.TimeoutSec)
+	s2, err := wssAPI.TcpReadTimeDuration(conn, randomSize+8,time.Duration(serviceConfig.TimeoutSec)*time.Second)
 	if err != nil {
 		logger.LOGE("read s2 failed")
 		return

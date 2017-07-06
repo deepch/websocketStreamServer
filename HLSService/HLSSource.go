@@ -148,7 +148,7 @@ func (this *HLSSource) createNewTSSegment(keyframe *flv.FlvTag) {
 	} else {
 		//flush data
 		if this.tsCur.GetDuration()<10000{
-			return
+			//return
 		}
 		data := this.tsCur.FlushTsList()
 		wssAPI.CreateDirectory("audio")
