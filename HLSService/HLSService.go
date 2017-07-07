@@ -96,17 +96,24 @@ func (this *HLSService) ProcessMessage(msg *wssAPI.Msg) (err error) {
 }
 
 func (this *HLSService) ServeHTTP(w http.ResponseWriter, req *http.Request) {
+	logger.LOGD(req.URL.Path)
+	defer func() {
+		logger.LOGT("serve end")
+	}()
 	url := req.URL.Path
 	url = strings.TrimPrefix(url, "/")
 	url = strings.TrimSuffix(url, "/")
-	logger.LOGD(url)
 	if strings.HasPrefix(url, serviceConfig.StreamRoute) {
 		url = strings.TrimPrefix(url, serviceConfig.StreamRoute)
 		if strings.HasPrefix(url, "/") {
 			streamName := strings.TrimPrefix(url, "/")
+			param:=streamName
 			if strings.HasSuffix(url, ".ts") {
 				subs := strings.Split(url, "/")
 				streamName = strings.TrimSuffix(streamName, subs[len(subs)-1])
+				streamName=strings.TrimSuffix(streamName,"/")
+			}else if strings.HasSuffix(url,".m3u8"){
+				streamName=strings.TrimSuffix(streamName,".m3u8")
 			}
 			//
 			this.muxSource.RLock()
@@ -115,15 +122,15 @@ func (this *HLSService) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 			if exist == false {
 				source = this.createSource(streamName)
 				if wssAPI.InterfaceIsNil(source) {
-					logger.LOGE("add hsl source "+streamName+" failed")
+					logger.LOGE("add hls source "+streamName+" failed")
 					w.WriteHeader(404)
 					return
 				} else {
-					source.ServeHTTP(w,req)
+					source.ServeHTTP(w,req,param)
 					return
 				}
 			}
-			source.ServeHTTP(w, req)
+			source.ServeHTTP(w, req,param)
 		} else {
 			w.WriteHeader(404)
 			return

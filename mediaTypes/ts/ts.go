@@ -126,7 +126,7 @@ func (this *TsCreater) AddTag(tag *flv.FlvTag) {
 		} else if flv.FLV_TAG_Video == tag.TagType {
 			dataPayload = this.videoPayload(tag)
 			if nil == dataPayload {
-				logger.LOGF(dataPayload)
+				logger.LOGE(dataPayload)
 				return
 			}
 			payloadSize = len(dataPayload)
@@ -136,6 +136,11 @@ func (this *TsCreater) AddTag(tag *flv.FlvTag) {
 
 		tsBuf := make([]byte, TS_length)
 		cur := 0
+
+		//timeMS := uint64(tag.Timestamp-this.beginTime)
+		timeMS := uint64(tag.Timestamp)
+		pcr := uint64(((timeMS * (PCR_HZ / 1000)) / 300) % 0x200000000)
+
 		if 1 == tsCount {
 			for idx := 0; idx < TS_length; idx++ {
 				tsBuf[idx] = 0xff
@@ -183,8 +188,8 @@ func (this *TsCreater) AddTag(tag *flv.FlvTag) {
 
 			//!四字节头
 			//PCR、PAD
-			timeMS := uint64(tag.Timestamp - this.beginTime)
-			pcr := uint64(((timeMS * (PCR_HZ / 1000)) / 300) % 0x200000000)
+			//timeMS := uint64(tag.Timestamp - this.beginTime)
+			//pcr := uint64(((timeMS * (PCR_HZ / 1000)) / 300) % 0x200000000)
 			if addPCR {
 				adpLength := 7 + padSize
 				tsBuf[cur] = byte(adpLength)
@@ -350,8 +355,8 @@ func (this *TsCreater) AddTag(tag *flv.FlvTag) {
 
 					//!四字节头
 					//PCR
-					timeMS := uint64(tag.Timestamp - this.beginTime)
-					pcr := uint64(((timeMS * (PCR_HZ / 1000)) / 300) % 0x200000000)
+					//timeMS := uint64(tag.Timestamp - this.beginTime)
+					//pcr := uint64(((timeMS * (PCR_HZ / 1000)) / 300) % 0x200000000)
 					if addPCR {
 						adpLength := 7
 						tsBuf[cur] = byte(adpLength)
@@ -522,6 +527,8 @@ func (this *TsCreater) GetDuration() (sec int) {
 func (this *TsCreater) FlushTsList() (tsList *list.List) {
 	tsList = this.tsCache
 	this.tsCache = list.New()
+	this.keyframeWrited=false
+	this.addPatPmt()
 	return tsList
 }
 
